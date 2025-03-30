@@ -8,7 +8,6 @@ import {
 } from "firebase/database";
 import { getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import bgLogin from "../Assets/bgmain.png";
 import { app } from "../firebase";
 
 const RecordForm = () => {
@@ -17,22 +16,23 @@ const RecordForm = () => {
     id: "",
     sender: "",
     receiver: "",
-    type: "Email",
+    type: "STL",
     channel: "Email",
     timestamp: "",
     description: "",
-    subject: "",
+    cite: "",
+    agenda: "",
+    title: "",
     staffName: "",
     customTypeValue: "",
     customChannelValue: "",
+    fileFormat: "PDF",
   });
   const [file, setFile] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const [isRADMessage, setIsRADMessage] = useState(false);
   const [nextId, setNextId] = useState("");
   const fileInputRef = useRef(null);
   const database = getDatabase(app);
@@ -59,16 +59,38 @@ const RecordForm = () => {
   }, [messageType, nextId]);
 
   useEffect(() => {
-    const isRAD = formData.type === "RAD";
-    setIsRADMessage(isRAD);
-    if (isRAD && !formData.subject.includes("SUBJECT:")) {
-      setFormData((prev) => ({
-        ...prev,
-        subject: "SUBJECT: \nLOCATION: \nTIME: \nCONTENT: ",
-      }));
-    } else if (!isRAD && isRADMessage) {
-      setFormData((prev) => ({ ...prev, subject: "" }));
+    // Reset the relevant fields based on type
+    const type = formData.type;
+    const newFormData = { ...formData };
+
+    // Clear all content fields first
+    newFormData.description = "";
+    newFormData.cite = "";
+    newFormData.agenda = "";
+    newFormData.title = "";
+
+    // Set default file format based on type
+    switch (type) {
+      case "STL":
+        newFormData.fileFormat = "PDF";
+        break;
+      case "Conference Notice":
+        newFormData.fileFormat = "JPEG";
+        break;
+      case "LOI":
+        newFormData.fileFormat = "MS Word";
+        break;
+      case "RAD":
+        newFormData.fileFormat = "PNG";
+        break;
+      case "Letter":
+        newFormData.fileFormat = "PDF";
+        break;
+      default:
+        newFormData.fileFormat = "PDF";
     }
+
+    setFormData(newFormData);
   }, [formData.type]);
 
   const generateNextId = async (userId) => {
@@ -83,14 +105,14 @@ const RecordForm = () => {
         if (snapshot.exists()) {
           snapshot.forEach((child) => {
             const data = child.val();
-            if (data.id && data.id.startsWith("R")) {
-              const idNum = parseInt(data.id.substring(1), 10);
-              if (!isNaN(idNum) && idNum > maxId) maxId = idNum;
+            if (data.id && !isNaN(parseInt(data.id.slice(1)))) {
+              const idNum = parseInt(data.id.slice(1), 10);
+              if (idNum > maxId) maxId = idNum;
             }
           });
         }
       }
-      const newId = `R${String(maxId + 1).padStart(3, "0")}`;
+      const newId = `O${String(maxId + 1).padStart(5, "0")}`;
       setNextId(newId);
       setFormData((prev) => ({ ...prev, id: newId }));
     } catch (error) {
@@ -107,48 +129,18 @@ const RecordForm = () => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
     setFile(selectedFile);
-    if (selectedFile.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (event) => setFilePreview(event.target.result);
-      reader.readAsDataURL(selectedFile);
-    } else if (selectedFile.type === "text/plain") {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFormData((prev) => ({ ...prev, subject: event.target.result }));
-        setFilePreview(null);
-      };
-      reader.readAsText(selectedFile);
-    } else {
-      setFilePreview(null);
-      setFormData((prev) => ({
-        ...prev,
-        subject: `File attached: ${selectedFile.name}`,
-      }));
-    }
-  };
-
-  const handleCancelFile = () => {
-    setFile(null);
-    setFilePreview(null);
-    if (isRADMessage) {
-      setFormData((prev) => ({
-        ...prev,
-        subject: "SUBJECT: \nLOCATION: \nTIME: \nCONTENT: ",
-      }));
-    } else {
-      setFormData((prev) => ({ ...prev, subject: "" }));
-    }
-    if (fileInputRef.current) fileInputRef.current.value = null;
   };
 
   const resetForm = () => {
     setFormData({
       id: nextId,
-      type: "Email",
+      type: "STL",
       channel: "Email",
       timestamp: "",
       description: "",
-      subject: "",
+      cite: "",
+      agenda: "",
+      title: "",
       sender:
         messageType === "sent" ? user?.displayName || user?.email || "" : "",
       receiver:
@@ -158,9 +150,9 @@ const RecordForm = () => {
       staffName: user?.displayName || user?.email || "",
       customTypeValue: "",
       customChannelValue: "",
+      fileFormat: "PDF",
     });
     setFile(null);
-    setFilePreview(null);
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = null;
   };
@@ -172,13 +164,28 @@ const RecordForm = () => {
       return;
     }
 
-    const requiredFields = [
-      "id",
-      messageType === "sent" ? "receiver" : "sender",
-      "timestamp",
-      "description",
-      "subject",
-    ];
+    let requiredFields = ["id", "timestamp"];
+
+    // Add type-specific required fields
+    switch (formData.type) {
+      case "STL":
+      case "Letter":
+        requiredFields.push("description");
+        break;
+      case "Conference Notice":
+        requiredFields.push("agenda");
+        break;
+      case "LOI":
+        requiredFields.push("title");
+        break;
+      case "RAD":
+        requiredFields.push("cite");
+        break;
+    }
+
+    // Add sender/receiver based on message type
+    requiredFields.push(messageType === "sent" ? "receiver" : "sender");
+
     if (requiredFields.some((field) => !formData[field])) {
       setError("Please fill in all required fields");
       return;
@@ -188,21 +195,12 @@ const RecordForm = () => {
     setError(null);
 
     try {
-      const finalType =
-        formData.type === "Others" ? formData.customTypeValue : formData.type;
-      const finalChannel =
-        formData.channel === "Others"
-          ? formData.customChannelValue
-          : formData.channel;
-
       const recordData = {
         id: formData.id,
         sender: formData.sender,
         receiver: formData.receiver,
-        type: finalType,
-        channel: finalChannel,
-        description: formData.description,
-        subject: formData.subject,
+        type: formData.type,
+        channel: formData.channel,
         timestamp: formData.timestamp
           ? new Date(formData.timestamp).getTime()
           : Date.now(),
@@ -211,8 +209,26 @@ const RecordForm = () => {
           user.displayName ||
           user.email ||
           "Unknown User",
+        fileFormat: formData.fileFormat,
         createdAt: serverTimestamp(),
       };
+
+      // Add type-specific fields
+      switch (formData.type) {
+        case "STL":
+        case "Letter":
+          recordData.description = formData.description;
+          break;
+        case "Conference Notice":
+          recordData.agenda = formData.agenda;
+          break;
+        case "LOI":
+          recordData.title = formData.title;
+          break;
+        case "RAD":
+          recordData.cite = formData.cite;
+          break;
+      }
 
       if (file) {
         const fileRef = storageRef(
@@ -241,6 +257,106 @@ const RecordForm = () => {
       setLoading(false);
     }
   };
+
+  // Helper function to render the appropriate content field based on type
+  const renderContentField = () => {
+    switch (formData.type) {
+      case "STL":
+      case "Letter":
+        return (
+          <div>
+            <label
+              htmlFor="description"
+              className="block text-sm text-gray-700 mb-1"
+            >
+              Subject <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+              required
+            ></textarea>
+          </div>
+        );
+      case "Conference Notice":
+        return (
+          <div>
+            <label
+              htmlFor="agenda"
+              className="block text-sm text-gray-700 mb-1"
+            >
+              Agenda <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="agenda"
+              name="agenda"
+              value={formData.agenda}
+              onChange={handleChange}
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+              required
+            ></textarea>
+          </div>
+        );
+      case "LOI":
+        return (
+          <div>
+            <label htmlFor="title" className="block text-sm text-gray-700 mb-1">
+              Title <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="title"
+              name="title"
+              value={formData.title}
+              onChange={handleChange}
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+              required
+            ></textarea>
+          </div>
+        );
+      case "RAD":
+        return (
+          <div>
+            <label htmlFor="cite" className="block text-sm text-gray-700 mb-1">
+              Cite Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="cite"
+              name="cite"
+              type="text"
+              value={formData.cite}
+              onChange={handleChange}
+              className="w-full p-2 border rounded-md bg-gray-200"
+              placeholder="Max 50 characters"
+              maxLength={50}
+              required
+            />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const channelOptions = [
+    "Email",
+    "Viber",
+    "Hardcopy",
+    "Cignal",
+    "Telegram",
+    "SMS",
+    "Zimbra",
+  ];
+
+  const fileFormatOptions = ["PDF", "JPEG", "MS Word", "PNG"];
 
   return (
     <div className="min-h-screen flex bg-gray-100 flex-col relative">
@@ -290,6 +406,28 @@ const RecordForm = () => {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
+              <label
+                htmlFor="type"
+                className="block text-sm text-gray-700 mb-1"
+              >
+                Type of Communication
+              </label>
+              <select
+                id="type"
+                name="type"
+                value={formData.type}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md bg-gray-200"
+              >
+                <option value="STL">STL (Subject to letter)</option>
+                <option value="Conference Notice">Conference Notice</option>
+                <option value="LOI">LOI (Letter of Instructions)</option>
+                <option value="RAD">RAD message</option>
+                <option value="Letter">Letter (Civilian)</option>
+              </select>
+            </div>
+
+            <div>
               <label htmlFor="id" className="block text-sm text-gray-700 mb-1">
                 ID <span className="text-red-500">*</span>
               </label>
@@ -302,37 +440,22 @@ const RecordForm = () => {
                 className="w-full p-2 bg-gray-100 border rounded-md"
               />
             </div>
+
             <div>
               <label
                 htmlFor="timestamp"
                 className="block text-sm text-gray-700 mb-1"
               >
-                Date <span className="text-red-500">*</span>
+                Dated <span className="text-red-500">*</span>
               </label>
               <input
                 id="timestamp"
                 name="timestamp"
-                type="datetime-local"
+                type="date"
                 value={formData.timestamp}
                 onChange={handleChange}
                 className="w-full p-2 border rounded-md"
                 required
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="staffName"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Staff
-              </label>
-              <input
-                id="staffName"
-                name="staffName"
-                type="text"
-                value={formData.staffName}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md"
               />
             </div>
           </div>
@@ -343,7 +466,7 @@ const RecordForm = () => {
                 htmlFor="sender"
                 className="block text-sm text-gray-700 mb-1"
               >
-                From <span className="text-red-500">*</span>
+                Sender/Originator <span className="text-red-500">*</span>
               </label>
               <input
                 id="sender"
@@ -351,19 +474,21 @@ const RecordForm = () => {
                 type="text"
                 value={formData.sender}
                 onChange={handleChange}
-                className={`w-full p-2 border rounded-md bg-gray-200${
-                  messageType === "sent" ? "bg-gray-100" : ""
+                className={`w-full p-2 border rounded-md ${
+                  messageType === "sent" ? "bg-gray-100" : "bg-white"
                 }`}
                 readOnly={messageType === "sent"}
+                maxLength={25}
                 required
               />
             </div>
+
             <div>
               <label
                 htmlFor="receiver"
                 className="block text-sm text-gray-700 mb-1"
               >
-                To <span className="text-red-500">*</span>
+                Receiver <span className="text-red-500">*</span>
               </label>
               <input
                 id="receiver"
@@ -371,8 +496,8 @@ const RecordForm = () => {
                 type="text"
                 value={formData.receiver}
                 onChange={handleChange}
-                className={`w-full p-2 border rounded-md bg-gray-200${
-                  messageType === "received" ? "bg-gray-100" : ""
+                className={`w-full p-2 border rounded-md ${
+                  messageType === "received" ? "bg-gray-100" : "bg-white"
                 }`}
                 readOnly={messageType === "received"}
                 required
@@ -380,40 +505,41 @@ const RecordForm = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {renderContentField()}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label
-                htmlFor="type"
+                htmlFor="dateReceived"
                 className="block text-sm text-gray-700 mb-1"
               >
-                Type
+                Date received
               </label>
-              <select
-                id="type"
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md bg-gray-200"
-              >
-                <option value="Email">Email</option>
-                <option value="RAD">RAD</option>
-                <option value="Conference notice">Conference notice</option>
-                <option value="LOI">LOI</option>
-                <option value="Memo">Memo</option>
-                <option value="Letters">Letters</option>
-                <option value="Others">Others</option>
-              </select>
-              {formData.type === "Others" && (
-                <input
-                  type="text"
-                  name="customTypeValue"
-                  placeholder="Specify..."
-                  className="w-full mt-1 p-2 border rounded-md"
-                  onChange={handleChange}
-                  value={formData.customTypeValue}
-                />
-              )}
+              <input
+                id="dateReceived"
+                name="dateReceived"
+                type="date"
+                className="w-full p-2 border rounded-md"
+              />
             </div>
+
+            <div>
+              <label
+                htmlFor="staffName"
+                className="block text-sm text-gray-700 mb-1"
+              >
+                Received by
+              </label>
+              <input
+                id="staffName"
+                name="staffName"
+                type="text"
+                value={formData.staffName}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+
             <div>
               <label
                 htmlFor="channel"
@@ -428,160 +554,52 @@ const RecordForm = () => {
                 onChange={handleChange}
                 className="w-full p-2 border rounded-md bg-gray-200"
               >
-                <option value="Email">Email</option>
-                <option value="Viber">Viber</option>
-                <option value="Hardcopy">Hardcopy</option>
-                <option value="Signal">Signal</option>
-                <option value="Telegram">Telegram</option>
-                <option value="SMS">SMS</option>
-                <option value="Others">Others</option>
+                {channelOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
               </select>
-              {formData.channel === "Others" && (
-                <input
-                  type="text"
-                  name="customChannelValue"
-                  placeholder="Specify..."
-                  className="w-full mt-1 p-2 border rounded-md"
-                  onChange={handleChange}
-                  value={formData.customChannelValue}
-                />
-              )}
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="description"
-              className="block text-sm text-gray-700 mb-1"
-            >
-              Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
-              placeholder="Enter description..."
-              required
-            ></textarea>
-          </div>
-
-          <div>
-            <label
-              htmlFor="subject"
-              className="block text-sm text-gray-700 mb-1"
-            >
-              Subject <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <textarea
-                id="subject"
-                name="subject"
-                value={formData.subject}
-                onChange={handleChange}
-                className="w-full h-32 p-2 border rounded-md resize-none bg-gray-200"
-                placeholder={
-                  isRADMessage
-                    ? "SUBJECT:\nLOCATION:\nTIME:\nCONTENT:"
-                    : "Content..."
-                }
-                required
-              ></textarea>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current.click()}
-                className="absolute right-2 top-2 p-1 bg-gray-100 border rounded-md hover:bg-gray-200"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="fileFormat"
+                className="block text-sm text-gray-700 mb-1"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 text-gray-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                  />
-                </svg>
-              </button>
+                File Format
+              </label>
+              <select
+                id="fileFormat"
+                name="fileFormat"
+                value={formData.fileFormat}
+                onChange={handleChange}
+                className="w-full p-2 border rounded-md bg-gray-200"
+              >
+                {fileFormatOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="file"
+                className="block text-sm text-gray-700 mb-1"
+              >
+                Attachment
+              </label>
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
-                className="hidden"
-                accept="image/*,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="w-full p-2 border rounded-md"
               />
             </div>
-
-            {(file || filePreview) && (
-              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-blue-500 mr-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                    <span className="text-sm text-blue-600">{file?.name}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCancelFile}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                {filePreview && file?.type.startsWith("image/") && (
-                  <div className="mt-1 flex justify-center">
-                    <img
-                      src={filePreview}
-                      alt="Preview"
-                      className="max-h-40 max-w-full object-contain rounded-md"
-                    />
-                  </div>
-                )}
-
-                {file && !file.type.startsWith("image/") && (
-                  <div className="mt-1 p-1 bg-gray-100 rounded-md text-center text-sm text-gray-600">
-                    {file.type === "text/plain"
-                      ? "Text loaded"
-                      : file.type.includes("pdf")
-                      ? "PDF"
-                      : file.type.includes("word")
-                      ? "Word"
-                      : `${file.type || "Unknown"}`}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end space-x-3">

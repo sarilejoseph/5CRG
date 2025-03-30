@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { getDatabase, ref, onValue, get } from "firebase/database";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "../firebase";
@@ -26,15 +26,12 @@ const MessageHistoryPage = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [viewMode, setViewMode] = useState("individual");
   const [allUsersData, setAllUsersData] = useState([]);
-  const printRef = useRef();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-        checkUserRole(user.uid);
-      } else {
-        setUser(null);
+      setUser(user);
+      if (user) checkUserRole(user.uid);
+      else {
         setIsAdmin(false);
         setSelectedUser(null);
         setReceivedMessages([]);
@@ -42,7 +39,7 @@ const MessageHistoryPage = () => {
         setLoading(false);
       }
     });
-    return () => unsubscribe();
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -50,28 +47,13 @@ const MessageHistoryPage = () => {
   }, [timeFilter, typeFilter, receivedMessages, sentMessages, activeTab]);
 
   const checkUserRole = async (uid) => {
-    try {
-      const userRef = ref(database, `users/${uid}`);
-      const snapshot = await get(userRef);
-
-      if (snapshot.exists()) {
-        const userData = snapshot.val();
-        const hasAdminAccess =
-          userData.role === "admin" || userData.role === "manager";
-        setIsAdmin(hasAdminAccess);
-
-        if (hasAdminAccess) {
-          fetchAllUsers(uid);
-        } else {
-          fetchMessages(uid);
-        }
-      } else {
-        fetchMessages(uid);
-      }
-    } catch (error) {
-      console.error("Error checking user role:", error);
-      fetchMessages(uid);
-    }
+    const userRef = ref(database, `users/${uid}`);
+    const snapshot = await get(userRef);
+    const userData = snapshot.val();
+    const hasAdminAccess =
+      userData?.role === "admin" || userData?.role === "manager";
+    setIsAdmin(hasAdminAccess);
+    hasAdminAccess ? fetchAllUsers(uid) : fetchMessages(uid);
   };
 
   const fetchAllUsers = (currentUserId) => {
@@ -86,22 +68,115 @@ const MessageHistoryPage = () => {
         }));
         setAllUsers(usersList);
         setSelectedUser(currentUserId);
-        fetchMessages(currentUserId);
-      } else {
-        fetchMessages(currentUserId);
       }
+      fetchMessages(currentUserId);
     });
   };
 
-  const handleUserChange = (e) => {
-    const selectedUid = e.target.value;
-    setSelectedUser(selectedUid);
-    fetchMessages(selectedUid);
+  const fetchMessages = (userId) => {
+    setLoading(true);
+    const receivedRef = ref(database, `users/${userId}/receivedMessages`);
+    onValue(receivedRef, (snapshot) => {
+      const data = snapshot.val();
+      const received = data
+        ? Object.entries(data).map(([key, value]) => {
+            // Determine subject based on type
+            let subject = "-";
+            switch (value.type) {
+              case "STL":
+              case "Letter":
+                subject = value.description || "-";
+                break;
+              case "Conference Notice":
+                subject = value.agenda || "-";
+                break;
+              case "LOI":
+                subject = value.title || "-";
+                break;
+              case "RAD":
+                subject = value.cite || "-";
+                break;
+              default:
+                subject = value.subject || "-";
+            }
+
+            return {
+              id: key,
+              ...value,
+              communicationType:
+                value.communicationType || value.type || "Unknown",
+              documentId: value.documentId || value.id || "-",
+              dateSent: value.dateSent || value.timestamp || Date.now(),
+              sender: value.sender || value.staffName || "Unknown",
+              receiver: value.receiver || "-",
+              subject, // Use normalized subject
+              dateReceived: value.dateReceived || value.timestamp || Date.now(),
+              channel: value.channel || "Unknown",
+              fileFormat: value.fileFormat || "Unknown",
+              hasAttachment: value.hasAttachment || false,
+            };
+          })
+        : [];
+      setReceivedMessages(received);
+      setFilteredReceivedMessages(received);
+
+      const sentRef = ref(database, `users/${userId}/sentMessages`);
+      onValue(sentRef, (snapshot) => {
+        const data = snapshot.val();
+        const sent = data
+          ? Object.entries(data).map(([key, value]) => {
+              // Determine subject based on type
+              let subject = "-";
+              switch (value.type) {
+                case "STL":
+                case "Letter":
+                  subject = value.description || "-";
+                  break;
+                case "Conference Notice":
+                  subject = value.agenda || "-";
+                  break;
+                case "LOI":
+                  subject = value.title || "-";
+                  break;
+                case "RAD":
+                  subject = value.cite || "-";
+                  break;
+                default:
+                  subject = value.subject || "-";
+              }
+
+              return {
+                id: key,
+                ...value,
+                communicationType:
+                  value.communicationType || value.type || "Unknown",
+                documentId: value.documentId || value.id || "-",
+                dateSent: value.dateSent || value.timestamp || Date.now(),
+                sender: value.sender || "Self",
+                receiver: value.receiver || "-",
+                subject, // Use normalized subject
+                dateReceived: value.dateReceived || null,
+                channel: value.channel || "Unknown",
+                fileFormat: value.fileFormat || "Unknown",
+                hasAttachment: value.hasAttachment || false,
+              };
+            })
+          : [];
+        setSentMessages(sent);
+        setFilteredSentMessages(sent);
+
+        setUniqueTypes([
+          ...new Set(
+            [...received, ...sent].map((msg) => msg.communicationType)
+          ),
+        ]);
+        setLoading(false);
+      });
+    });
   };
 
   const fetchAllUsersData = () => {
     setLoading(true);
-
     const usersRef = ref(database, "users");
     onValue(usersRef, (snapshot) => {
       const usersData = snapshot.val();
@@ -110,196 +185,110 @@ const MessageHistoryPage = () => {
         setLoading(false);
         return;
       }
-
       const combinedData = [];
-      let processedUsers = 0;
-      const totalUsers = Object.keys(usersData).length;
-
-      Object.entries(usersData).forEach(([uid, userData]) => {
-        // Process received messages
-        const receivedRef = ref(database, `users/${uid}/receivedMessages`);
-        get(receivedRef)
-          .then((receivedSnapshot) => {
-            const receivedData = receivedSnapshot.val();
-
-            if (receivedData) {
-              Object.entries(receivedData).forEach(([msgId, msgData]) => {
-                combinedData.push({
-                  id: msgId,
-                  userId: uid,
-                  userName: userData.name || userData.email || uid,
-                  userEmail: userData.email,
-                  messageType: "received",
-                  sender: msgData.sender,
-                  receiver: uid,
-                  type: msgData.type,
-                  description: msgData.description,
-                  timestamp: msgData.timestamp,
-                  staffName: msgData.staffName,
-                });
-              });
-            }
-
-            // Process sent messages
-            const sentRef = ref(database, `users/${uid}/sentMessages`);
-            get(sentRef)
-              .then((sentSnapshot) => {
-                const sentData = sentSnapshot.val();
-
-                if (sentData) {
-                  Object.entries(sentData).forEach(([msgId, msgData]) => {
-                    combinedData.push({
+      Promise.all(
+        Object.entries(usersData).map(([uid, userData]) =>
+          Promise.all([
+            get(ref(database, `users/${uid}/receivedMessages`)).then((snap) =>
+              snap.val()
+                ? Object.entries(snap.val()).map(([msgId, msgData]) => {
+                    // Normalize subject based on type
+                    let subject = "-";
+                    switch (msgData.type) {
+                      case "STL":
+                      case "Letter":
+                        subject = msgData.description || "-";
+                        break;
+                      case "Conference Notice":
+                        subject = msgData.agenda || "-";
+                        break;
+                      case "LOI":
+                        subject = msgData.title || "-";
+                        break;
+                      case "RAD":
+                        subject = msgData.cite || "-";
+                        break;
+                      default:
+                        subject = msgData.subject || "-";
+                    }
+                    return {
                       id: msgId,
                       userId: uid,
                       userName: userData.name || userData.email || uid,
-                      userEmail: userData.email,
+                      messageType: "received",
+                      ...msgData,
+                      communicationType:
+                        msgData.communicationType || msgData.type || "Unknown",
+                      documentId: msgData.documentId || msgData.id || "-",
+                      dateSent:
+                        msgData.dateSent || msgData.timestamp || Date.now(),
+                      sender: msgData.sender || msgData.staffName || "Unknown",
+                      receiver: msgData.receiver || "-",
+                      subject, // Normalized subject
+                      dateReceived:
+                        msgData.dateReceived || msgData.timestamp || Date.now(),
+                      channel: msgData.channel || "Unknown",
+                      fileFormat: msgData.fileFormat || "Unknown",
+                      hasAttachment: msgData.hasAttachment || false,
+                    };
+                  })
+                : []
+            ),
+            get(ref(database, `users/${uid}/sentMessages`)).then((snap) =>
+              snap.val()
+                ? Object.entries(snap.val()).map(([msgId, msgData]) => {
+                    // Normalize subject based on type
+                    let subject = "-";
+                    switch (msgData.type) {
+                      case "STL":
+                      case "Letter":
+                        subject = msgData.description || "-";
+                        break;
+                      case "Conference Notice":
+                        subject = msgData.agenda || "-";
+                        break;
+                      case "LOI":
+                        subject = msgData.title || "-";
+                        break;
+                      case "RAD":
+                        subject = msgData.cite || "-";
+                        break;
+                      default:
+                        subject = msgData.subject || "-";
+                    }
+                    return {
+                      id: msgId,
+                      userId: uid,
+                      userName: userData.name || userData.email || uid,
                       messageType: "sent",
-                      sender: uid,
-                      receiver: msgData.receiver,
-                      type: msgData.type,
-                      description: msgData.description,
-                      timestamp: msgData.timestamp,
-                      staffName: msgData.staffName,
-                    });
-                  });
-                }
-
-                processedUsers++;
-
-                // When all users are processed, sort by timestamp and update state
-                if (processedUsers === totalUsers) {
-                  combinedData.sort((a, b) => b.timestamp - a.timestamp);
-
-                  const types = [
-                    ...new Set(combinedData.map((msg) => msg.type)),
-                  ];
-                  setUniqueTypes(types);
-
-                  setAllUsersData(combinedData);
-                  setLoading(false);
-                }
-              })
-              .catch((error) => {
-                console.error("Error fetching sent messages:", error);
-                processedUsers++;
-                if (processedUsers === totalUsers) {
-                  setLoading(false);
-                }
-              });
-          })
-          .catch((error) => {
-            console.error("Error fetching received messages:", error);
-            processedUsers++;
-            if (processedUsers === totalUsers) {
-              setLoading(false);
-            }
-          });
-      });
-    });
-  };
-
-  const fetchMessages = (userId) => {
-    setLoading(true);
-
-    const receivedRef = ref(database, `users/${userId}/receivedMessages`);
-    onValue(receivedRef, (snapshot) => {
-      const data = snapshot.val();
-      let receivedMessageArray = [];
-
-      if (data) {
-        receivedMessageArray = Object.entries(data).map(([key, value]) => ({
-          id: key,
-          sender: value.sender,
-          type: value.type,
-          description: value.description,
-          timestamp: value.timestamp,
-          staffName: value.staffName,
-        }));
-
-        setReceivedMessages(receivedMessageArray);
-        setFilteredReceivedMessages(receivedMessageArray);
-      } else {
-        setReceivedMessages([]);
-        setFilteredReceivedMessages([]);
-      }
-
-      const sentRef = ref(database, `users/${userId}/sentMessages`);
-      onValue(sentRef, (snapshot) => {
-        const data = snapshot.val();
-        let sentMessageArray = [];
-
-        if (data) {
-          sentMessageArray = Object.entries(data).map(([key, value]) => ({
-            id: key,
-            receiver: value.receiver,
-            type: value.type,
-            description: value.description,
-            timestamp: value.timestamp,
-            staffName: value.staffName,
-          }));
-
-          setSentMessages(sentMessageArray);
-          setFilteredSentMessages(sentMessageArray);
-        } else {
-          setSentMessages([]);
-          setFilteredSentMessages([]);
-        }
-
-        const allMessages = [...receivedMessageArray, ...sentMessageArray];
-        const types = [...new Set(allMessages.map((msg) => msg.type))];
-        setUniqueTypes(types);
+                      ...msgData,
+                      communicationType:
+                        msgData.communicationType || msgData.type || "Unknown",
+                      documentId: msgData.documentId || msgData.id || "-",
+                      dateSent:
+                        msgData.dateSent || msgData.timestamp || Date.now(),
+                      sender: msgData.sender || "Self",
+                      receiver: msgData.receiver || "-",
+                      subject, // Normalized subject
+                      dateReceived: msgData.dateReceived || null,
+                      channel: msgData.channel || "Unknown",
+                      fileFormat: msgData.fileFormat || "Unknown",
+                      hasAttachment: msgData.hasAttachment || false,
+                    };
+                  })
+                : []
+            ),
+          ]).then(([received, sent]) => combinedData.push(...received, ...sent))
+        )
+      ).then(() => {
+        combinedData.sort((a, b) => b.timestamp - a.timestamp);
+        setUniqueTypes([
+          ...new Set(combinedData.map((msg) => msg.communicationType)),
+        ]);
+        setAllUsersData(combinedData);
         setLoading(false);
       });
     });
-  };
-
-  const filterAllUsersData = () => {
-    let filtered = [...allUsersData];
-
-    if (timeFilter !== "all") {
-      const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-      if (timeFilter === "today") {
-        filtered = filtered.filter(
-          (message) =>
-            new Date(message.timestamp).toDateString() === today.toDateString()
-        );
-      } else if (timeFilter === "week") {
-        filtered = filtered.filter(
-          (message) =>
-            new Date(message.timestamp) >= startOfWeek &&
-            new Date(message.timestamp) <= today
-        );
-      } else if (timeFilter === "month") {
-        filtered = filtered.filter(
-          (message) =>
-            new Date(message.timestamp) >= startOfMonth &&
-            new Date(message.timestamp) <= today
-        );
-      }
-    }
-
-    if (typeFilter !== "all") {
-      filtered = filtered.filter((message) => message.type === typeFilter);
-    }
-
-    if (activeTab === "received") {
-      filtered = filtered.filter(
-        (message) => message.messageType === "received"
-      );
-    } else if (activeTab === "sent") {
-      filtered = filtered.filter((message) => message.messageType === "sent");
-    }
-
-    return filtered;
-  };
-
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
   };
 
   const applyFilters = () => {
@@ -308,56 +297,53 @@ const MessageHistoryPage = () => {
 
     if (timeFilter !== "all") {
       const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-      if (timeFilter === "today") {
-        filteredReceived = filteredReceived.filter(
-          (message) =>
-            new Date(message.timestamp).toDateString() === today.toDateString()
-        );
-        filteredSent = filteredSent.filter(
-          (message) =>
-            new Date(message.timestamp).toDateString() === today.toDateString()
-        );
-      } else if (timeFilter === "week") {
-        filteredReceived = filteredReceived.filter(
-          (message) =>
-            new Date(message.timestamp) >= startOfWeek &&
-            new Date(message.timestamp) <= today
-        );
-        filteredSent = filteredSent.filter(
-          (message) =>
-            new Date(message.timestamp) >= startOfWeek &&
-            new Date(message.timestamp) <= today
-        );
-      } else if (timeFilter === "month") {
-        filteredReceived = filteredReceived.filter(
-          (message) =>
-            new Date(message.timestamp) >= startOfMonth &&
-            new Date(message.timestamp) <= today
-        );
-        filteredSent = filteredSent.filter(
-          (message) =>
-            new Date(message.timestamp) >= startOfMonth &&
-            new Date(message.timestamp) <= today
-        );
-      }
+      const filters = {
+        today: (d) =>
+          new Date(d.timestamp).toDateString() === today.toDateString(),
+        week: (d) =>
+          new Date(d.timestamp) >=
+          new Date(today.setDate(today.getDate() - today.getDay())),
+        month: (d) =>
+          new Date(d.timestamp) >=
+          new Date(today.getFullYear(), today.getMonth(), 1),
+      };
+      filteredReceived = filteredReceived.filter(filters[timeFilter]);
+      filteredSent = filteredSent.filter(filters[timeFilter]);
     }
 
     if (typeFilter !== "all") {
-      filteredReceived = filteredReceived.filter(
-        (message) => message.type === typeFilter
-      );
-      filteredSent = filteredSent.filter(
-        (message) => message.type === typeFilter
-      );
+      filteredReceived = filteredReceived.filter((m) => m.type === typeFilter);
+      filteredSent = filteredSent.filter((m) => m.type === typeFilter);
     }
 
     setFilteredReceivedMessages(filteredReceived);
     setFilteredSentMessages(filteredSent);
   };
+
+  const filterAllUsersData = () => {
+    let filtered = [...allUsersData];
+    if (timeFilter !== "all") {
+      const today = new Date();
+      const filters = {
+        today: (m) =>
+          new Date(m.timestamp).toDateString() === today.toDateString(),
+        week: (m) =>
+          new Date(m.timestamp) >=
+          new Date(today.setDate(today.getDate() - today.getDay())),
+        month: (m) =>
+          new Date(m.timestamp) >=
+          new Date(today.getFullYear(), today.getMonth(), 1),
+      };
+      filtered = filtered.filter(filters[timeFilter]);
+    }
+    if (typeFilter !== "all")
+      filtered = filtered.filter((m) => m.type === typeFilter);
+    if (activeTab !== "all")
+      filtered = filtered.filter((m) => m.messageType === activeTab);
+    return filtered;
+  };
+
+  const formatTimestamp = (timestamp) => new Date(timestamp).toLocaleString();
 
   const handlePrint = (section) => {
     const printContent = document.getElementById(section);
@@ -464,11 +450,19 @@ const MessageHistoryPage = () => {
               color: #64748b;
               font-size: 14px;
             }
+            .footer {
+              margin-top: 30px;
+              padding-top: 15px;
+              border-top: 1px solid #e2e8f0;
+              text-align: center;
+              font-size: 12px;
+              color: #6c757d;
+            }
           </style>
         </head>
         <body>
           <div class="official-header">
-          <img src="${crs}" alt="AFP Logo" class="logo-left">
+            <img src="${crs}" alt="AFP Logo" class="logo-left">
             <div class="vision-text">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
             <div class="main-title">HEADQUARTERS</div>
             <div class="subtitle">5<sup>th</sup> CIVIL RELATIONS GROUP</div>
@@ -490,6 +484,11 @@ const MessageHistoryPage = () => {
             ${viewMode === "all" ? "<p>Aggregated data for all users</p>" : ""}
           </div>
           ${printContent.outerHTML}
+          <div class="footer">
+            <p>Generated by: User ID - ${user?.uid || "Unknown"}${
+      user?.email ? ` | Email - ${user?.email}` : ""
+    }</p>
+          </div>
         </body>
       </html>
     `);
@@ -500,289 +499,172 @@ const MessageHistoryPage = () => {
     }, 500);
     setShowPrintDropdown(false);
   };
-
   const toggleViewMode = (mode) => {
     setViewMode(mode);
-    if (mode === "all") {
-      fetchAllUsersData();
-    } else {
-      fetchMessages(selectedUser);
-    }
+    mode === "all" ? fetchAllUsersData() : fetchMessages(selectedUser);
   };
 
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8 max-w-7xl">
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-indigo-900 mb-2">
-            Records & Reports
-          </h1>
-          <div className="h-1 w-24 bg-indigo-600 rounded"></div>
-        </div>
+      <div className="container mx-auto py-12 px-4 max-w-7xl">
+        <h1 className="text-3xl font-bold text-indigo-900 mb-2">
+          Records & Reports
+        </h1>
 
         {isAdmin && (
           <div className="mb-8 bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-xl font-medium text-gray-800 mb-4">
-              View Settings
-            </h2>
-
-            <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-12">
+            <div className="flex flex-col md:flex-row gap-6">
               <div>
                 <p className="text-sm text-gray-600 font-medium mb-2">
                   View Mode
                 </p>
-                <div className="inline-flex rounded-lg shadow-sm">
+                <div className="inline-flex rounded-lg">
                   <button
-                    className={`px-5 py-2.5 text-sm font-medium rounded-l-lg border-r transition duration-150 ${
+                    className={`px-5 py-2.5 ${
                       viewMode === "individual"
                         ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-700 hover:bg-indigo-50"
-                    }`}
+                        : "bg-white"
+                    } rounded-l-lg`}
                     onClick={() => toggleViewMode("individual")}
                   >
-                    Individual User
+                    Individual
                   </button>
                   <button
-                    className={`px-5 py-2.5 text-sm font-medium rounded-r-lg transition duration-150 ${
+                    className={`px-5 py-2.5 ${
                       viewMode === "all"
                         ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-700 hover:bg-indigo-50"
-                    }`}
+                        : "bg-white"
+                    } rounded-r-lg`}
                     onClick={() => toggleViewMode("all")}
                   >
                     All Users
                   </button>
                 </div>
               </div>
-
               {viewMode === "individual" && allUsers.length > 0 && (
-                <div className="flex-grow">
-                  <p className="text-sm text-gray-600 font-medium mb-2">
-                    Select User
-                  </p>
-                  <div className="relative">
-                    <select
-                      value={selectedUser || ""}
-                      onChange={handleUserChange}
-                      className="w-full pl-4 pr-12 py-2.5 border border-gray-200 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 shadow-sm transition-colors"
-                    >
-                      {allUsers.map((userData) => (
-                        <option key={userData.uid} value={userData.uid}>
-                          {userData.name} ({userData.email})
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                          clipRule="evenodd"
-                        ></path>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
+                <select
+                  value={selectedUser || ""}
+                  onChange={(e) => {
+                    setSelectedUser(e.target.value);
+                    fetchMessages(e.target.value);
+                  }}
+                  className="w-full p-2 border rounded-lg"
+                >
+                  {allUsers.map((user) => (
+                    <option key={user.uid} value={user.uid}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-white rounded-xl shadow-lg">
           <div className="px-6 pt-6">
-            <div className="border-b border-gray-100">
-              <nav className="-mb-px flex space-x-6">
-                <button
-                  className={`pb-4 font-medium text-sm transition-colors duration-200 ${
-                    activeTab === "received"
-                      ? "text-indigo-600 border-b-2 border-indigo-600"
-                      : "text-gray-500 hover:text-indigo-500"
-                  }`}
-                  onClick={() => setActiveTab("received")}
-                >
-                  Incoming Messages
-                </button>
-                <button
-                  className={`pb-4 font-medium text-sm transition-colors duration-200 ${
-                    activeTab === "sent"
-                      ? "text-indigo-600 border-b-2 border-indigo-600"
-                      : "text-gray-500 hover:text-indigo-500"
-                  }`}
-                  onClick={() => setActiveTab("sent")}
-                >
-                  Outgoing Messages
-                </button>
-              </nav>
-            </div>
+            <nav className="flex space-x-6 border-b">
+              <button
+                className={`pb-4 ${
+                  activeTab === "received"
+                    ? "text-indigo-600 border-b-2 border-indigo-600"
+                    : "text-gray-500"
+                }`}
+                onClick={() => setActiveTab("received")}
+              >
+                Incoming
+              </button>
+              <button
+                className={`pb-4 ${
+                  activeTab === "sent"
+                    ? "text-indigo-600 border-b-2 border-indigo-600"
+                    : "text-gray-500"
+                }`}
+                onClick={() => setActiveTab("sent")}
+              >
+                Outgoing
+              </button>
+            </nav>
 
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 gap-4">
-              <div className="relative">
-                <div className="relative">
-                  <select
-                    className="pl-4 pr-12 py-2.5 border border-gray-200 text-gray-700 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm transition-colors"
-                    value={timeFilter}
-                    onChange={(e) => setTimeFilter(e.target.value)}
-                  >
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                    <svg
-                      className="w-5 h-5"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      ></path>
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3">
+            <div className="flex justify-between py-4 gap-4">
+              <select
+                className="p-2 border rounded-lg"
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value)}
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+              </select>
+              <div className="flex space-x-3">
                 <div className="relative">
                   <button
-                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex px-4 py-2 border rounded-lg"
                     onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-                      />
-                    </svg>
-                    <span className="text-sm font-medium">Filter</span>
-                    {typeFilter !== "all" && (
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-xs font-medium text-indigo-600">
-                        1
-                      </span>
-                    )}
+                    Filter
                   </button>
-
                   {showFilterDropdown && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg z-10 border border-gray-100 overflow-hidden">
-                      <div className="p-2 border-b border-gray-100">
-                        <h3 className="text-sm font-medium text-gray-700">
-                          Filter by Type
-                        </h3>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto py-1">
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg">
+                      <button
+                        className={`w-full text-left p-2 ${
+                          typeFilter === "all"
+                            ? "text-indigo-600"
+                            : "text-gray-700"
+                        }`}
+                        onClick={() => {
+                          setTypeFilter("all");
+                          setShowFilterDropdown(false);
+                        }}
+                      >
+                        All Types
+                      </button>
+                      {uniqueTypes.map((type) => (
                         <button
-                          className={`w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${
-                            typeFilter === "all"
-                              ? "text-indigo-600 font-medium bg-indigo-50"
+                          key={type}
+                          className={`w-full text-left p-2 ${
+                            typeFilter === type
+                              ? "text-indigo-600"
                               : "text-gray-700"
                           }`}
                           onClick={() => {
-                            setTypeFilter("all");
+                            setTypeFilter(type);
                             setShowFilterDropdown(false);
                           }}
                         >
-                          All Types
+                          {type}
                         </button>
-                        {uniqueTypes.map((type) => (
-                          <button
-                            key={type}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${
-                              typeFilter === type
-                                ? "text-indigo-600 font-medium bg-indigo-50"
-                                : "text-gray-700"
-                            }`}
-                            onClick={() => {
-                              setTypeFilter(type);
-                              setShowFilterDropdown(false);
-                            }}
-                          >
-                            {type}
-                          </button>
-                        ))}
-                      </div>
+                      ))}
                     </div>
                   )}
                 </div>
-
                 <div className="relative">
                   <button
-                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="flex px-4 py-2 bg-indigo-600 text-white rounded-lg"
                     onClick={() => setShowPrintDropdown(!showPrintDropdown)}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                      />
-                    </svg>
-                    <span className="text-sm font-medium">Export</span>
+                    Export
                   </button>
-
                   {showPrintDropdown && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg z-10 border border-gray-100 overflow-hidden">
-                      <div className="p-2 border-b border-gray-100">
-                        <h3 className="text-sm font-medium text-gray-700">
-                          Export Options
-                        </h3>
-                      </div>
-                      <div className="py-1">
-                        <button
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 flex items-center gap-2"
-                          onClick={() =>
-                            handlePrint(
-                              viewMode === "all"
-                                ? "allUsersMessagesTable"
-                                : activeTab === "received"
-                                ? "receivedMessagesTable"
-                                : "sentMessagesTable"
-                            )
-                          }
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4 text-gray-500"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                            />
-                          </svg>
-                          Print{" "}
-                          {viewMode === "all"
-                            ? "All Users"
-                            : activeTab === "received"
-                            ? "Received"
-                            : "Sent"}{" "}
-                          Messages
-                        </button>
-                      </div>
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg">
+                      <button
+                        className="w-full text-left p-2"
+                        onClick={() =>
+                          handlePrint(
+                            viewMode === "all"
+                              ? "allUsersMessagesTable"
+                              : `${activeTab}MessagesTable`
+                          )
+                        }
+                      >
+                        Print{" "}
+                        {viewMode === "all"
+                          ? "All Users"
+                          : activeTab === "received"
+                          ? "Received"
+                          : "Sent"}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -791,270 +673,167 @@ const MessageHistoryPage = () => {
           </div>
 
           {loading ? (
-            <div className="flex justify-center items-center py-32">
-              <div className="relative">
-                <div className="h-16 w-16 rounded-full border-t-4 border-b-4 border-indigo-500 animate-spin"></div>
-                <div className="absolute top-0 left-0 h-16 w-16 rounded-full border-t-4 border-b-4 border-indigo-200 opacity-40"></div>
-              </div>
+            <div className="flex justify-center py-32">
+              <div className="h-16 w-16 rounded-full border-t-4 border-b-4 border-indigo-500 animate-spin"></div>
             </div>
           ) : (
             <div className="px-6 pb-6">
-              {/* Individual user view */}
               {viewMode === "individual" && (
                 <>
                   <div
                     className={activeTab === "received" ? "block" : "hidden"}
                     id="receivedMessagesTable"
-                    ref={printRef}
                   >
-                    <div className="w-full">
-                      <h2 className="sr-only">Received Messages</h2>
-                      {filteredReceivedMessages.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-16 w-16 text-gray-300"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1}
-                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <p className="mt-4 font-medium">
-                            No received messages found
-                          </p>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Try changing your filters or time period
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto rounded-lg">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  From
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  Type
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  Message
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  Date
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
-                              {filteredReceivedMessages.map((message) => (
-                                <tr
-                                  key={message.id}
-                                  className="hover:bg-gray-50"
-                                >
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {message.staffName || "System"}
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                    <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-blue-100 text-blue-800">
-                                      {message.type}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-4 text-sm text-gray-500 max-w-md">
-                                    {message.description}
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {formatTimestamp(message.timestamp)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                    {filteredReceivedMessages.length === 0 ? (
+                      <div className="text-center py-12">
+                        No received messages
+                      </div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-4 py-3">From</th>
+                            <th className="px-4 py-3">Type</th>
+                            <th className="px-4 py-3">ID</th>
+                            <th className="px-4 py-3">Subject</th>
+                            <th className="px-4 py-3">Date Sent</th>
+                            <th className="px-4 py-3">Date Received</th>
+                            <th className="px-4 py-3">Channel</th>
+                            <th className="px-4 py-3">Format</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredReceivedMessages.map((message) => (
+                            <tr key={message.id}>
+                              <td className="px-4 py-4">
+                                {message.sender ||
+                                  message.staffName ||
+                                  "System"}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.communicationType || message.type}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.documentId || message.id}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.subject || message.description}
+                              </td>
+                              <td className="px-4 py-4">
+                                {formatTimestamp(
+                                  message.dateSent || message.timestamp
+                                )}
+                              </td>
+                              <td className="px-4 py-4">
+                                {formatTimestamp(
+                                  message.dateReceived || message.timestamp
+                                )}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.channel || "Unknown"}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.fileFormat || "Unknown"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
-
                   <div
                     className={activeTab === "sent" ? "block" : "hidden"}
                     id="sentMessagesTable"
                   >
-                    <div className="w-full">
-                      <h2 className="sr-only">Sent Messages</h2>
-                      {filteredSentMessages.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-16 w-16 text-gray-300"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1}
-                              d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76"
-                            />
-                          </svg>
-                          <p className="mt-4 font-medium">
-                            No sent messages found
-                          </p>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Try changing your filters or time period
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto rounded-lg">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  To
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  Type
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  Message
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                  Date
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
-                              {filteredSentMessages.map((message) => (
-                                <tr
-                                  key={message.id}
-                                  className="hover:bg-gray-50"
-                                >
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {message.receiver}
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                    <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-green-100 text-green-800">
-                                      {message.type}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-4 text-sm text-gray-500 max-w-md">
-                                    {message.description}
-                                  </td>
-                                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {formatTimestamp(message.timestamp)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                    {filteredSentMessages.length === 0 ? (
+                      <div className="text-center py-12">No sent messages</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-4 py-3">To</th>
+                            <th className="px-4 py-3">Type</th>
+                            <th className="px-4 py-3">ID</th>
+                            <th className="px-4 py-3">Subject</th>
+                            <th className="px-4 py-3">Date Sent</th>
+                            <th className="px-4 py-3">Channel</th>
+                            <th className="px-4 py-3">Format</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredSentMessages.map((message) => (
+                            <tr key={message.id}>
+                              <td className="px-4 py-4">{message.receiver}</td>
+                              <td className="px-4 py-3">
+                                {message.communicationType || message.type}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.documentId || message.id}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.subject || message.description}
+                              </td>
+                              <td className="px-4 py-4">
+                                {formatTimestamp(
+                                  message.dateSent || message.timestamp
+                                )}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.channel || "Unknown"}
+                              </td>
+                              <td className="px-4 py-4">
+                                {message.fileFormat || "Unknown"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </>
               )}
-
-              {/* All users view */}
               {viewMode === "all" && (
                 <div id="allUsersMessagesTable">
-                  <div className="w-full">
-                    <h2 className="sr-only">All Users Messages</h2>
-                    {allUsersData.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-16 w-16 text-gray-300"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        <p className="mt-4 font-medium">No messages found</p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Try changing your filters or time period
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto rounded-lg">
-                        <table className="w-full border-collapse">
-                          <thead>
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                User
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                Direction
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                {activeTab === "received" ? "From" : "To"}
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                Type
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                Message
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
-                                Date
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-100">
-                            {filterAllUsersData().map((message) => (
-                              <tr
-                                key={message.id + message.userId}
-                                className="hover:bg-gray-50"
-                              >
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-700">
-                                  {message.userName}
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                  <span
-                                    className={`px-2 inline-flex text-xs leading-5 font-medium rounded-full ${
-                                      message.messageType === "received"
-                                        ? "bg-blue-100 text-blue-800"
-                                        : "bg-green-100 text-green-800"
-                                    }`}
-                                  >
-                                    {message.messageType === "received"
-                                      ? "Received"
-                                      : "Sent"}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                                  {message.messageType === "received"
-                                    ? message.staffName || "System"
-                                    : message.receiver}
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                  <span className="px-2 inline-flex text-xs leading-5 font-medium rounded-full bg-purple-100 text-purple-800">
-                                    {message.type}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-4 text-sm text-gray-500 max-w-md">
-                                  {message.description}
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {formatTimestamp(message.timestamp)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
+                  {allUsersData.length === 0 ? (
+                    <div className="text-center py-12">No messages</div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="px-4 py-3">User</th>
+                          <th className="px-4 py-3">Direction</th>
+                          <th className="px-4 py-3">
+                            {activeTab === "received" ? "From" : "To"}
+                          </th>
+                          <th className="px-4 py-3">Type</th>
+                          <th className="px-4 py-3">Subject</th>{" "}
+                          {/* Changed from Message */}
+                          <th className="px-4 py-3">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filterAllUsersData().map((message) => (
+                          <tr key={message.id + message.userId}>
+                            <td className="px-4 py-4">{message.userName}</td>
+                            <td className="px-4 py-4">{message.messageType}</td>
+                            <td className="px-4 py-4">
+                              {message.messageType === "received"
+                                ? message.sender || "System"
+                                : message.receiver}
+                            </td>
+                            <td className="px-4 py-4">{message.type}</td>
+                            <td className="px-4 py-4">
+                              {message.subject}
+                            </td>{" "}
+                            {/* Use normalized subject */}
+                            <td className="px-4 py-4">
+                              {formatTimestamp(message.timestamp)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
             </div>

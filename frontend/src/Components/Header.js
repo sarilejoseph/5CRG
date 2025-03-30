@@ -12,7 +12,8 @@ const Header = ({ setMainContentMargin }) => {
   const [userName, setUserName] = useState("User");
   const auth = getAuth();
   const userDropdownRef = useRef(null);
-  const sidebarWidth = 288;
+  const headerHeight = 64; // Fixed header height in pixels
+  const sidebarWidth = 256; // Reduced from 288 for better symmetry
   const collapsedSidebarWidth = 64;
 
   useEffect(() => {
@@ -36,21 +37,16 @@ const Header = ({ setMainContentMargin }) => {
         setUserName("User");
       }
     });
-
     return () => unsubscribe();
   }, [auth]);
 
   useEffect(() => {
     if (setMainContentMargin) {
-      requestAnimationFrame(() => {
-        setMainContentMargin(
-          isSidebarOpen ? sidebarWidth : collapsedSidebarWidth
-        );
-      });
+      setMainContentMargin(
+        isSidebarOpen ? sidebarWidth : collapsedSidebarWidth
+      );
     }
-
-    document.body.classList.toggle("sidebar-open", isSidebarOpen);
-    document.body.classList.toggle("sidebar-collapsed", !isSidebarOpen);
+    document.body.style.paddingTop = `${headerHeight}px`; // Prevent content overlap with fixed header
   }, [isSidebarOpen, setMainContentMargin]);
 
   const toggleSidebar = (e) => {
@@ -82,7 +78,6 @@ const Header = ({ setMainContentMargin }) => {
       ) {
         closeSidebar();
       }
-
       if (
         isUserDropdownOpen &&
         userDropdownRef.current &&
@@ -91,7 +86,6 @@ const Header = ({ setMainContentMargin }) => {
         closeUserDropdown();
       }
     };
-
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, [isSidebarOpen, isUserDropdownOpen]);
@@ -140,7 +134,6 @@ const Header = ({ setMainContentMargin }) => {
       ),
       default: <path d="M9 5l7 7-7 7" />,
     };
-
     return (
       <svg
         className="w-5 h-5"
@@ -156,136 +149,135 @@ const Header = ({ setMainContentMargin }) => {
 
   return (
     <div className="relative">
-      <header className={isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"}>
-        <nav className="bg-gradient-to-r from-blue-800 to-blue-900 border-b border-gray-700 px-4 lg:px-6 py-3 shadow-md">
-          <div className="flex flex-wrap justify-between items-center mx-auto max-w-screen-xl">
-            <div className="flex items-center">
-              <button
-                className="flex items-center focus:outline-none transition-transform hover:scale-105 sidebar-toggle-btn"
-                onClick={toggleSidebar}
-              >
-                <div className="flex items-center px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                  <div className="flex items-center ml-3">
-                    <span className="self-center text-xl font-semibold whitespace-nowrap text-white mr-2">
-                      5CRG
-                    </span>
-                    <svg
-                      className="w-6 h-6 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M4 6h16M4 12h16M4 18h16"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <div className="flex items-center">
-              <div className="relative ml-auto" ref={userDropdownRef}>
-                <button
-                  onClick={toggleUserDropdown}
-                  className="flex items-center py-2 px-4 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 focus:outline-none ml-6 border border-transparent hover:border-blue-500"
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-800 to-blue-900 border-b border-gray-700 px-4 lg:px-6 py-3 shadow-md">
+        <nav className="flex justify-between items-center mx-auto max-w-screen-xl">
+          <div className="flex items-center">
+            <button
+              className="flex items-center focus:outline-none transition-transform hover:scale-105 sidebar-toggle-btn"
+              onClick={toggleSidebar}
+            >
+              <div className="flex items-center px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                <span className="text-xl font-semibold text-white mr-2">
+                  5CRG
+                </span>
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
                 >
-                  <svg
-                    className="w-5 h-5 mr-2 text-blue-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span className="mr-1">{userName}</span>
-                  <svg
-                    className={`w-4 h-4 ml-1 transition-transform duration-300 ${
-                      isUserDropdownOpen ? "rotate-180" : ""
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
-                {isUserDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg z-50 transform origin-top-right transition-all duration-200 ease-out">
-                    <Link
-                      to="/profile"
-                      onClick={closeUserDropdown}
-                      className="block"
-                    >
-                      <span className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 rounded-t-lg group">
-                        <svg
-                          className="w-5 h-5 mr-3 text-gray-500 group-hover:text-blue-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                          />
-                        </svg>
-                        Profile
-                      </span>
-                    </Link>
-                    <Link to="/" onClick={handleLogout} className="block">
-                      <span className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 rounded-b-lg border-t border-gray-100 group">
-                        <svg
-                          className="w-5 h-5 mr-3 text-gray-500 group-hover:text-red-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                          />
-                        </svg>
-                        Logout
-                      </span>
-                    </Link>
-                  </div>
-                )}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
               </div>
+            </button>
+          </div>
+
+          <div className="flex items-center">
+            <div className="relative" ref={userDropdownRef}>
+              <button
+                onClick={toggleUserDropdown}
+                className="flex items-center py-2 px-4 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 focus:outline-none border border-transparent hover:border-blue-500"
+              >
+                <svg
+                  className="w-5 h-5 mr-2 text-blue-300"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="mr-1">{userName}</span>
+                <svg
+                  className={`w-4 h-4 ml-1 transition-transform duration-300 ${
+                    isUserDropdownOpen ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+              {isUserDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg z-50">
+                  <Link
+                    to="/profile"
+                    onClick={closeUserDropdown}
+                    className="block"
+                  >
+                    <span className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 rounded-t-lg group">
+                      <svg
+                        className="w-5 h-5 mr-3 text-gray-500 group-hover:text-blue-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                      Profile
+                    </span>
+                  </Link>
+                  <Link to="/" onClick={handleLogout} className="block">
+                    <span className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 rounded-b-lg border-t border-gray-100 group">
+                      <svg
+                        className="w-5 h-5 mr-3 text-gray-500 group-hover:text-red-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                        />
+                      </svg>
+                      Logout
+                    </span>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </nav>
       </header>
 
       <div
-        className={`fixed top-[64px] left-0 h-[calc(100vh-64px)] z-40 transform transition-all duration-300 ease-in-out sidebar shadow-xl will-change-transform`}
+        className={`fixed left-0 z-40 transition-all duration-300 ease-in-out sidebar shadow-xl`}
         style={{
-          width: isSidebarOpen ? "16rem" : "4rem",
+          top: `${headerHeight}px`,
+          width: isSidebarOpen
+            ? `${sidebarWidth}px`
+            : `${collapsedSidebarWidth}px`,
+          height: `calc(100vh - ${headerHeight}px)`,
           background: isSidebarOpen
             ? "linear-gradient(to bottom, #0a192f, #172a45)"
             : "#0a192f",
-          transform: "translateZ(0)",
         }}
       >
         <div
@@ -300,7 +292,7 @@ const Header = ({ setMainContentMargin }) => {
           {isSidebarOpen && (
             <div className="flex items-center">
               <img src={logo} alt="logo" className="h-8 w-auto" />
-              <span className="self-center text-xl font-semibold whitespace-nowrap text-white ml-2">
+              <span className="text-xl font-semibold text-white ml-2">
                 5th CRG
               </span>
             </div>
@@ -314,7 +306,7 @@ const Header = ({ setMainContentMargin }) => {
         >
           <div className="mb-6">
             {isSidebarOpen && (
-              <h3 className="text-xs uppercase font-bold text-blue-300 px-4 mb-3 tracking-wider opacity-100 transition-opacity duration-300">
+              <h3 className="text-xs uppercase font-bold text-blue-300 px-4 mb-3 tracking-wider">
                 Main Actions
               </h3>
             )}
@@ -323,7 +315,7 @@ const Header = ({ setMainContentMargin }) => {
                 <Link
                   to="/add"
                   onClick={handleSidebarItemClick}
-                  className={`flex items-center transform transition-all duration-200 ${
+                  className={`flex items-center transition-all duration-200 ${
                     isSidebarOpen
                       ? "px-4 py-3 text-white rounded-lg bg-gradient-to-r from-navy-600 to-navy-700 hover:from-navy-700 hover:to-navy-800 shadow-md hover:shadow-lg mb-2 group"
                       : "py-3 flex justify-center text-white hover:bg-navy-700"
@@ -349,7 +341,7 @@ const Header = ({ setMainContentMargin }) => {
                   <Link
                     to={item.path}
                     onClick={handleSidebarItemClick}
-                    className={`flex items-center transform transition-all duration-200 ${
+                    className={`flex items-center transition-all duration-200 ${
                       isSidebarOpen
                         ? "px-4 py-3 text-white rounded-lg hover:bg-navy-800/40 group"
                         : "py-3 flex justify-center text-white hover:bg-navy-700"
@@ -376,7 +368,7 @@ const Header = ({ setMainContentMargin }) => {
 
           <div className="mb-6">
             {isSidebarOpen && (
-              <h3 className="text-xs uppercase font-bold text-blue-400 px-4 mb-3 tracking-wider opacity-100 transition-opacity duration-300">
+              <h3 className="text-xs uppercase font-bold text-blue-400 px-4 mb-3 tracking-wider">
                 Reporting
               </h3>
             )}
@@ -386,7 +378,7 @@ const Header = ({ setMainContentMargin }) => {
                   <Link
                     to={item.path}
                     onClick={handleSidebarItemClick}
-                    className={`flex items-center transform transition-all duration-200 ${
+                    className={`flex items-center transition-all duration-200 ${
                       isSidebarOpen
                         ? "px-4 py-3 text-white rounded-lg hover:bg-blue-800/40 group"
                         : "py-3 flex justify-center text-white hover:bg-blue-700"
@@ -413,7 +405,7 @@ const Header = ({ setMainContentMargin }) => {
 
           <div className="mb-6">
             {isSidebarOpen && (
-              <h3 className="text-xs uppercase font-bold text-blue-400 px-4 mb-3 tracking-wider opacity-100 transition-opacity duration-300">
+              <h3 className="text-xs uppercase font-bold text-blue-400 px-4 mb-3 tracking-wider">
                 Administration
               </h3>
             )}
@@ -423,7 +415,7 @@ const Header = ({ setMainContentMargin }) => {
                   <Link
                     to={item.path}
                     onClick={handleSidebarItemClick}
-                    className={`flex items-center transform transition-all duration-200 ${
+                    className={`flex items-center transition-all duration-200 ${
                       isSidebarOpen
                         ? "px-4 py-3 text-white rounded-lg hover:bg-blue-800/40 group"
                         : "py-3 flex justify-center text-white hover:bg-blue-700"
@@ -449,7 +441,7 @@ const Header = ({ setMainContentMargin }) => {
           </div>
 
           {isSidebarOpen && (
-            <div className="absolute bottom-0 left-0 right-0 px-4 py-3 text-xs text-gray-400 border-t border-gray-700 transition-opacity duration-300">
+            <div className="absolute bottom-0 left-0 right-0 px-4 py-3 text-xs text-gray-400 border-t border-gray-700">
               <div className="flex justify-between items-center">
                 <span>5th CRG Portal</span>
                 <span>v1.0.0</span>
@@ -463,7 +455,7 @@ const Header = ({ setMainContentMargin }) => {
         <div
           className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-30 transition-opacity duration-300"
           onClick={closeSidebar}
-        ></div>
+        />
       )}
     </div>
   );

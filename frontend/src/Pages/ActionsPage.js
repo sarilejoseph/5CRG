@@ -4,984 +4,575 @@ import { onAuthStateChanged } from "firebase/auth";
 import { database, auth } from "../firebase";
 
 const ActionsPage = () => {
-  const [receivedMessages, setReceivedMessages] = useState([]);
-  const [sentMessages, setSentMessages] = useState([]);
-  const [filteredReceivedMessages, setFilteredReceivedMessages] = useState([]);
-  const [filteredSentMessages, setFilteredSentMessages] = useState([]);
+  const [messages, setMessages] = useState({ received: [], sent: [] });
+  const [filteredMessages, setFilteredMessages] = useState({
+    received: [],
+    sent: [],
+  });
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("received");
-  const [showModal, setShowModal] = useState(false);
-  const [currentMessage, setCurrentMessage] = useState(null);
-  const [modalType, setModalType] = useState("");
-  const [editData, setEditData] = useState({ description: "", type: "" });
+  const [modal, setModal] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-        checkUserRole(user.uid);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
-        setSelectedUser(null);
-        resetMessages();
-        setLoading(false);
-      }
+      setUser(user);
+      if (user) checkUserRole(user.uid);
+      else resetState();
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    applySearch();
-  }, [searchTerm, receivedMessages, sentMessages, activeTab]);
-
-  useEffect(() => {
-    if (currentMessage && modalType === "edit") {
-      setEditData({
-        description: currentMessage.description || "",
-        type: currentMessage.type || "",
-      });
-    }
-  }, [currentMessage, modalType]);
-
-  // Add event listener for screen resize to handle sidebar responsiveness
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth > 1024) {
-        setSidebarOpen(true);
-      } else {
-        setSidebarOpen(false);
-      }
-    };
-
-    // Set initial state based on window width
-    handleResize();
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    const term = searchTerm.toLowerCase();
+    setFilteredMessages({
+      received: messages.received.filter((m) =>
+        [m.sender, m.type, m.subject, m.staffName].some((v) =>
+          v?.toLowerCase().includes(term)
+        )
+      ),
+      sent: messages.sent.filter((m) =>
+        [m.receiver, m.type, m.subject, m.staffName].some((v) =>
+          v?.toLowerCase().includes(term)
+        )
+      ),
+    });
+  }, [searchTerm, messages, activeTab]);
 
   const checkUserRole = async (uid) => {
-    try {
-      const userRef = ref(database, `users/${uid}`);
-      const snapshot = await get(userRef);
-
-      if (snapshot.exists()) {
-        const userData = snapshot.val();
-        const hasAdminAccess =
-          userData.role === "admin" || userData.role === "manager";
-        setIsAdmin(hasAdminAccess);
-
-        if (hasAdminAccess) {
-          fetchAllUsers();
-          setSelectedUser(uid);
-        }
-
-        fetchMessages(uid);
-      } else {
-        fetchMessages(uid);
-      }
-    } catch (error) {
-      console.error("Error checking user role:", error);
-      fetchMessages(uid);
-    }
+    const userRef = ref(database, `users/${uid}`);
+    const snapshot = await get(userRef);
+    const userData = snapshot.val();
+    const admin = userData?.role === "admin" || userData?.role === "manager";
+    setIsAdmin(admin);
+    fetchAllUsers();
+    setSelectedUser(uid);
+    fetchMessages(admin ? null : uid); // Admin fetches all, non-admin fetches own
   };
 
-  const resetMessages = () => {
-    setReceivedMessages([]);
-    setSentMessages([]);
-    setFilteredReceivedMessages([]);
-    setFilteredSentMessages([]);
+  const resetState = () => {
+    setMessages({ received: [], sent: [] });
+    setFilteredMessages({ received: [], sent: [] });
+    setIsAdmin(false);
+    setSelectedUser(null);
+    setLoading(false);
   };
 
   const fetchAllUsers = () => {
-    const usersRef = ref(database, "users");
-    onValue(usersRef, (snapshot) => {
+    onValue(ref(database, "users"), (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const usersList = Object.entries(data).map(([uid, userData]) => ({
-          uid,
-          name: userData.name || userData.email || uid,
-          email: userData.email,
-        }));
-        setAllUsers(usersList);
-      }
+      if (data)
+        setAllUsers(
+          Object.entries(data).map(([uid, d]) => ({
+            uid,
+            name: d.name || d.email || uid,
+            email: d.email,
+          }))
+        );
     });
   };
 
-  const handleUserChange = (e) => {
-    const selectedUid = e.target.value;
-    setSelectedUser(selectedUid);
-    fetchMessages(selectedUid);
-  };
-
   const fetchMessages = (userId) => {
-    const receivedRef = ref(database, `users/${userId}/receivedMessages`);
-    onValue(
-      receivedRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        let receivedMessageArray = data
-          ? Object.entries(data).map(([key, value]) => ({
-              id: key,
-              sender: value.sender,
-              type: value.type,
-              description: value.description,
-              timestamp: value.timestamp,
-              staffName: value.staffName,
-            }))
-          : [];
-
-        setReceivedMessages(receivedMessageArray);
-        setFilteredReceivedMessages(receivedMessageArray);
-
-        const sentRef = ref(database, `users/${userId}/sentMessages`);
-        onValue(
-          sentRef,
-          (snapshot) => {
-            const data = snapshot.val();
-            let sentMessageArray = data
-              ? Object.entries(data).map(([key, value]) => ({
-                  id: key,
-                  receiver: value.receiver,
-                  type: value.type,
-                  description: value.description,
-                  timestamp: value.timestamp,
-                  staffName: value.staffName,
-                }))
-              : [];
-
-            setSentMessages(sentMessageArray);
-            setFilteredSentMessages(sentMessageArray);
-            setLoading(false);
-          },
-          (error) => {
-            console.error("Error fetching sent messages:", error);
-            setLoading(false);
-          }
-        );
-      },
-      (error) => {
-        console.error("Error fetching received messages:", error);
-        setLoading(false);
+    setLoading(true);
+    const normalizeSubject = (msg) => {
+      switch (msg.type) {
+        case "STL":
+        case "Letter":
+          return msg.description || "-";
+        case "Conference Notice":
+          return msg.agenda || "-";
+        case "LOI":
+          return msg.title || "-";
+        case "RAD":
+          return msg.cite || "-";
+        default:
+          return msg.subject || "-";
       }
-    );
-  };
+    };
 
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-  };
+    if (isAdmin && !userId) {
+      // Admin fetches all users' data
+      onValue(ref(database, "users"), (snapshot) => {
+        const usersData = snapshot.val();
+        if (!usersData) return setMessages({ received: [], sent: [] });
 
-  const applySearch = () => {
-    if (!searchTerm.trim()) {
-      setFilteredReceivedMessages(receivedMessages);
-      setFilteredSentMessages(sentMessages);
-      return;
+        const allReceived = [];
+        const allSent = [];
+        Object.entries(usersData).forEach(([uid, userData]) => {
+          const received = userData.receivedMessages || {};
+          const sent = userData.sentMessages || {};
+
+          allReceived.push(
+            ...Object.entries(received).map(([id, m]) => ({
+              id,
+              uid,
+              ...m,
+              subject: normalizeSubject(m),
+            }))
+          );
+          allSent.push(
+            ...Object.entries(sent).map(([id, m]) => ({
+              id,
+              uid,
+              ...m,
+              subject: normalizeSubject(m),
+            }))
+          );
+        });
+
+        setMessages({ received: allReceived, sent: allSent });
+        setLoading(false);
+      });
+    } else {
+      // Non-admin fetches own data
+      onValue(ref(database, `users/${userId}/receivedMessages`), (snapshot) => {
+        const data = snapshot.val();
+        setMessages((prev) => ({
+          ...prev,
+          received: data
+            ? Object.entries(data).map(([id, m]) => ({
+                id,
+                uid: userId,
+                ...m,
+                subject: normalizeSubject(m),
+              }))
+            : [],
+        }));
+      });
+
+      onValue(ref(database, `users/${userId}/sentMessages`), (snapshot) => {
+        const data = snapshot.val();
+        setMessages((prev) => ({
+          ...prev,
+          sent: data
+            ? Object.entries(data).map(([id, m]) => ({
+                id,
+                uid: userId,
+                ...m,
+                subject: normalizeSubject(m),
+              }))
+            : [],
+        }));
+        setLoading(false);
+      });
     }
-
-    const term = searchTerm.toLowerCase();
-
-    const searchReceived = receivedMessages.filter(
-      (message) =>
-        message.sender?.toLowerCase().includes(term) ||
-        message.type?.toLowerCase().includes(term) ||
-        message.description?.toLowerCase().includes(term) ||
-        message.staffName?.toLowerCase().includes(term)
-    );
-
-    const searchSent = sentMessages.filter(
-      (message) =>
-        message.receiver?.toLowerCase().includes(term) ||
-        message.type?.toLowerCase().includes(term) ||
-        message.description?.toLowerCase().includes(term) ||
-        message.staffName?.toLowerCase().includes(term)
-    );
-
-    setFilteredReceivedMessages(searchReceived);
-    setFilteredSentMessages(searchSent);
   };
 
-  const handleDelete = (id) => {
-    if (!selectedUser || !id) return;
+  const formatTimestamp = (ts) => new Date(ts).toLocaleString();
 
-    const path =
-      activeTab === "received"
-        ? `users/${selectedUser}/receivedMessages/${id}`
-        : `users/${selectedUser}/sentMessages/${id}`;
-
-    remove(ref(database, path))
-      .then(() => {
-        console.log("Message deleted successfully");
-        setShowModal(false);
-      })
-      .catch((error) => {
-        console.error("Error deleting message:", error);
-      });
+  const handleAction = (action, message) => {
+    const path = `users/${message.uid}/${activeTab}Messages/${message.id}`;
+    if (action === "delete")
+      remove(ref(database, path)).then(() => setModal(null));
+    if (action === "edit")
+      update(ref(database, path), modal.data).then(() => setModal(null));
   };
 
-  const handleEdit = (id) => {
-    if (!selectedUser || !id) return;
+  const openModal = (type, message) =>
+    setModal({
+      type,
+      message,
+      data: { type: message.type, subject: message.subject },
+    });
 
-    const path =
-      activeTab === "received"
-        ? `users/${selectedUser}/receivedMessages/${id}`
-        : `users/${selectedUser}/sentMessages/${id}`;
+  const Modal = () => {
+    if (!modal) return null;
+    const { type, message } = modal;
 
-    update(ref(database, path), editData)
-      .then(() => {
-        console.log("Message updated successfully");
-        setShowModal(false);
-      })
-      .catch((error) => {
-        console.error("Error updating message:", error);
-      });
-  };
-
-  const openModal = (type, message) => {
-    setModalType(type);
-    setCurrentMessage(message);
-    setShowModal(true);
-  };
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const renderModal = () => {
-    if (!showModal || !currentMessage) return null;
-
-    const message = currentMessage;
-
-    if (modalType === "view") {
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-4 mb-4">
-              <h2 className="text-xl font-bold text-indigo-800">
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl">
+          {type === "view" && (
+            <>
+              <h2 className="text-xl font-bold text-indigo-800 mb-4">
                 Message Details
               </h2>
+              <div className="space-y-2">
+                <p>
+                  <strong>ID:</strong> {message.id}
+                </p>
+                <p>
+                  <strong>
+                    {activeTab === "received" ? "Sender" : "Receiver"}:
+                  </strong>{" "}
+                  {message[activeTab === "received" ? "sender" : "receiver"]}
+                </p>
+                <p>
+                  <strong>Type:</strong> {message.type}
+                </p>
+                <p>
+                  <strong>Subject:</strong> {message.subject}
+                </p>
+                <p>
+                  <strong>Time:</strong> {formatTimestamp(message.timestamp)}
+                </p>
+                <p>
+                  <strong>Staff:</strong> {message.staffName}
+                </p>
+                {isAdmin && (
+                  <p>
+                    <strong>User ID:</strong> {message.uid}
+                  </p>
+                )}
+              </div>
               <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="flex flex-col md:flex-row md:items-center">
-                <span className="text-gray-500 font-medium md:w-1/3">ID:</span>
-                <span className="font-mono bg-gray-100 p-1 rounded text-gray-700 text-sm flex-1 md:ml-2">
-                  {message.id}
-                </span>
-              </div>
-              <div className="flex flex-col md:flex-row md:items-center">
-                <span className="text-gray-500 font-medium md:w-1/3">
-                  {activeTab === "received" ? "Sender" : "Receiver"}:
-                </span>
-                <span className="font-medium text-indigo-700 flex-1 md:ml-2">
-                  {activeTab === "received" ? message.sender : message.receiver}
-                </span>
-              </div>
-              <div className="flex flex-col md:flex-row md:items-center">
-                <span className="text-gray-500 font-medium md:w-1/3">
-                  Type:
-                </span>
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium w-max md:ml-2">
-                  {message.type}
-                </span>
-              </div>
-              <div className="flex flex-col md:flex-row">
-                <span className="text-gray-500 font-medium md:w-1/3">
-                  Description:
-                </span>
-                <span className="text-gray-700 flex-1 md:ml-2">
-                  {message.description}
-                </span>
-              </div>
-              <div className="flex flex-col md:flex-row md:items-center">
-                <span className="text-gray-500 font-medium md:w-1/3">
-                  Time:
-                </span>
-                <span className="text-gray-700 flex-1 md:ml-2">
-                  {formatTimestamp(message.timestamp)}
-                </span>
-              </div>
-              <div className="flex flex-col md:flex-row md:items-center">
-                <span className="text-gray-500 font-medium md:w-1/3">
-                  Staff:
-                </span>
-                <span className="text-gray-700 flex-1 md:ml-2">
-                  {message.staffName}
-                </span>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-md"
-                onClick={() => setShowModal(false)}
+                className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg"
+                onClick={() => setModal(null)}
               >
                 Close
               </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (modalType === "edit") {
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-4 mb-4">
-              <h2 className="text-xl font-bold text-indigo-800">
+            </>
+          )}
+          {type === "edit" && (
+            <>
+              <h2 className="text-xl font-bold text-indigo-800 mb-4">
                 Edit Message
               </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              <input
+                className="w-full p-2 border rounded-lg mb-2"
+                value={modal.data.type}
+                onChange={(e) =>
+                  setModal({
+                    ...modal,
+                    data: { ...modal.data, type: e.target.value },
+                  })
+                }
+                placeholder="Type"
+              />
+              <textarea
+                className="w-full p-2 border rounded-lg min-h-[100px]"
+                value={modal.data.subject}
+                onChange={(e) =>
+                  setModal({
+                    ...modal,
+                    data: { ...modal.data, subject: e.target.value },
+                  })
+                }
+                placeholder="Subject"
+              />
+              <div className="mt-4 flex justify-end space-x-2">
+                <button
+                  className="px-4 py-2 bg-gray-200 rounded-lg"
+                  onClick={() => setModal(null)}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-700 font-medium mb-2">
-                  Message Type
-                </label>
-                <input
-                  type="text"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                  value={editData.type}
-                  onChange={(e) =>
-                    setEditData({ ...editData, type: e.target.value })
-                  }
-                  placeholder="Enter message type"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 font-medium mb-2">
-                  Description
-                </label>
-                <textarea
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors min-h-[120px]"
-                  value={editData.description}
-                  onChange={(e) =>
-                    setEditData({ ...editData, description: e.target.value })
-                  }
-                  placeholder="Enter message description"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button
-                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                onClick={() => setShowModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-md"
-                onClick={() => handleEdit(message.id)}
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (modalType === "delete") {
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-8 w-8 text-red-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+                  onClick={() => handleAction("edit", message)}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
+                  Save
+                </button>
               </div>
-              <h2 className="text-xl font-bold mb-2 text-gray-800">
+            </>
+          )}
+          {type === "delete" && (
+            <>
+              <h2 className="text-xl font-bold text-gray-800 mb-4">
                 Confirm Delete
               </h2>
               <p className="text-gray-600 mb-6">
-                Are you sure you want to delete this message? This action cannot
-                be undone.
+                Are you sure? This cannot be undone.
               </p>
-            </div>
-            <div className="flex justify-center space-x-3">
-              <button
-                className="flex-1 px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                onClick={() => setShowModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md"
-                onClick={() => handleDelete(message.id)}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+              <div className="flex justify-center space-x-2">
+                <button
+                  className="px-4 py-2 bg-gray-200 rounded-lg"
+                  onClick={() => setModal(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg"
+                  onClick={() => handleAction("delete", message)}
+                >
+                  Delete
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      );
-    }
-
-    return null;
+      </div>
+    );
   };
 
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="container mx-auto py-12 px-4 sm:px-6 lg:px-8 max-w-7xl">
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-indigo-900 mb-2">Actions</h1>
-          <div className="h-1 w-24 bg-indigo-600 rounded"></div>
+      <div className="container mx-auto py-8 px-4 max-w-7xl">
+        <h1 className="text-3xl font-bold text-indigo-900 mb-6">Actions</h1>
 
-          {isAdmin && allUsers.length > 0 && (
-            <div className="mb-6 mt-10 bg-white p-5 rounded-xl shadow-md">
-              <label className="block text-gray-700 font-medium mb-3">
-                View User:
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedUser || ""}
-                  onChange={handleUserChange}
-                  className="block w-full p-3 pr-10 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                >
-                  {allUsers.map((user) => (
-                    <option key={user.uid} value={user.uid}>
-                      {user.name} ({user.email})
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-gray-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </div>
-              </div>
+        {isAdmin && allUsers.length > 0 && (
+          <select
+            value={selectedUser || ""}
+            onChange={(e) => {
+              setSelectedUser(e.target.value);
+              fetchMessages(
+                isAdmin && e.target.value === "all" ? null : e.target.value
+              );
+            }}
+            className="mb-6 w-full p-2 border rounded-lg"
+          >
+            <option value="all">All Users</option>
+            {allUsers.map((u) => (
+              <option key={u.uid} value={u.uid}>
+                {u.name} ({u.email})
+              </option>
+            ))}
+          </select>
+        )}
+
+        <div className="bg-white rounded-xl shadow-md">
+          <div className="p-4 flex justify-between items-center border-b">
+            <div className="space-x-2">
+              <button
+                className={`px-3 py-1 rounded-lg ${
+                  activeTab === "received"
+                    ? "bg-indigo-100 text-indigo-800"
+                    : "text-gray-600"
+                }`}
+                onClick={() => setActiveTab("received")}
+              >
+                Received
+              </button>
+              <button
+                className={`px-3 py-1 rounded-lg ${
+                  activeTab === "sent"
+                    ? "bg-indigo-100 text-indigo-800"
+                    : "text-gray-600"
+                }`}
+                onClick={() => setActiveTab("sent")}
+              >
+                Sent
+              </button>
             </div>
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-64 p-2 border rounded-lg"
+            />
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="w-12 h-12 border-t-4 border-indigo-500 rounded-full animate-spin mx-auto"></div>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
+                    {activeTab === "received" ? "Sender" : "Receiver"}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
+                    Type
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
+                    Subject
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
+                    Staff
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
+                    Time
+                  </th>
+                  {isAdmin && (
+                    <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
+                      User
+                    </th>
+                  )}
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 uppercase">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMessages[activeTab].length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? "7" : "6"}
+                      className="p-8 text-center text-gray-500"
+                    >
+                      No {activeTab} messages
+                    </td>
+                  </tr>
+                ) : (
+                  filteredMessages[activeTab].map((m) => (
+                    <tr key={m.id + m.uid} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-indigo-700">
+                        {m[activeTab === "received" ? "sender" : "receiver"] ||
+                          "Unknown"}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                          {m.type || "N/A"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 truncate max-w-xs">
+                        {m.subject}
+                      </td>
+                      <td className="px-4 py-2">{m.staffName || "Unknown"}</td>
+                      <td className="px-4 py-2">
+                        {formatTimestamp(m.timestamp)}
+                      </td>
+                      {isAdmin && <td className="px-4 py-2">{m.uid}</td>}
+                      <td className="px-4 py-2 text-right space-x-2">
+                        <button
+                          onClick={() => openModal("view", m)}
+                          className="text-indigo-600"
+                        >
+                          <EyeIcon />
+                        </button>
+                        <button
+                          onClick={() => openModal("edit", m)}
+                          className="text-blue-600"
+                        >
+                          <EditIcon />
+                        </button>
+                        <button
+                          onClick={() => openModal("delete", m)}
+                          className="text-red-600"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           )}
-
-          <div className="bg-white rounded-xl shadow-md mb-6">
-            <div className="flex justify-between items-center p-5 border-b">
-              <div className="flex space-x-2">
-                <button
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === "received"
-                      ? "bg-indigo-100 text-indigo-800"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                  onClick={() => setActiveTab("received")}
-                >
-                  Received
-                </button>
-                <button
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    activeTab === "sent"
-                      ? "bg-indigo-100 text-indigo-800"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                  onClick={() => setActiveTab("sent")}
-                >
-                  Sent
-                </button>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search messages..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full md:w-72 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="p-16 flex flex-col items-center justify-center">
-                <div className="w-16 h-16 border-t-4 border-indigo-500 border-solid rounded-full animate-spin"></div>
-                <p className="mt-4 text-gray-600">Loading messages...</p>
-              </div>
-            ) : activeTab === "received" ? (
-              <div className="overflow-x-auto">
-                {filteredReceivedMessages.length === 0 ? (
-                  <div className="p-16 text-center">
-                    <div className="inline-flex items-center justify-center bg-indigo-100 rounded-full p-4 mb-4">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-10 w-10 text-indigo-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                        />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-700 mb-2">
-                      No messages found
-                    </h3>
-                    <p className="text-gray-500">
-                      {searchTerm
-                        ? "No messages match your search criteria"
-                        : "Your inbox is empty"}
-                    </p>
-                  </div>
-                ) : (
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Sender
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Description
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Staff
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Time
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredReceivedMessages.map((message) => (
-                        <tr
-                          key={message.id}
-                          className="hover:bg-gray-50 border-b transition-colors"
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-700">
-                            {message.sender || "Unknown"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                              {message.type || "Not specified"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-800 max-w-xs truncate">
-                            {message.description || "No description"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {message.staffName || "Unknown"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {formatTimestamp(message.timestamp)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end space-x-3">
-                              <button
-                                onClick={() => openModal("view", message)}
-                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                  />
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                  />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => openModal("edit", message)}
-                                className="text-blue-600 hover:text-blue-900 transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                                  />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => openModal("delete", message)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                {filteredSentMessages.length === 0 ? (
-                  <div className="p-16 text-center">
-                    <div className="inline-flex items-center justify-center bg-indigo-100 rounded-full p-4 mb-4">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-10 w-10 text-indigo-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                        />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-700 mb-2">
-                      No messages found
-                    </h3>
-                    <p className="text-gray-500">
-                      {searchTerm
-                        ? "No messages match your search criteria"
-                        : "You haven't sent any messages yet"}
-                    </p>
-                  </div>
-                ) : (
-                  <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b bg-gray-50">
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Receiver
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Description
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Staff
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Time
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSentMessages.map((message) => (
-                        <tr
-                          key={message.id}
-                          className="hover:bg-gray-50 border-b transition-colors"
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-700">
-                            {message.receiver || "Unknown"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                              {message.type || "Not specified"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-800 max-w-xs truncate">
-                            {message.description || "No description"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {message.staffName || "Unknown"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {formatTimestamp(message.timestamp)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end space-x-3">
-                              <button
-                                onClick={() => openModal("view", message)}
-                                className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                  />
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                  />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => openModal("edit", message)}
-                                className="text-blue-600 hover:text-blue-900 transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                                  />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => openModal("delete", message)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-lg font-bold text-indigo-800 mb-4">
-              Statistics
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-indigo-50 p-6 rounded-xl">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-indigo-100 p-3 rounded-lg">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8 text-indigo-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-gray-500 text-sm font-medium">
-                      Received Messages
-                    </h3>
-                    <p className="text-2xl font-bold text-indigo-800">
-                      {receivedMessages.length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-indigo-50 p-6 rounded-xl">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-indigo-100 p-3 rounded-lg">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8 text-indigo-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-gray-500 text-sm font-medium">
-                      Sent Messages
-                    </h3>
-                    <p className="text-2xl font-bold text-indigo-800">
-                      {sentMessages.length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-indigo-50 p-6 rounded-xl">
-                <div className="flex items-center space-x-4">
-                  <div className="bg-indigo-100 p-3 rounded-lg">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8 text-indigo-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-gray-500 text-sm font-medium">
-                      Total Messages
-                    </h3>
-                    <p className="text-2xl font-bold text-indigo-800">
-                      {receivedMessages.length + sentMessages.length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
+
+        <div className="mt-6 bg-white rounded-xl shadow-md p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard
+            icon={<InboxIcon />}
+            label="Received"
+            value={messages.received.length}
+          />
+          <StatCard
+            icon={<SendIcon />}
+            label="Sent"
+            value={messages.sent.length}
+          />
+          <StatCard
+            icon={<MessageIcon />}
+            label="Total"
+            value={messages.received.length + messages.sent.length}
+          />
+        </div>
+
+        <Modal />
       </div>
-
-      {/* Modal */}
-      {renderModal()}
-
-      {/* Overlay for when sidebar is open on mobile */}
-      {sidebarOpen && window.innerWidth < 1024 && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        ></div>
-      )}
     </div>
   );
 };
+
+// Icon Components
+const EyeIcon = () => (
+  <svg
+    className="h-5 w-5"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-12.542 0C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+    />
+  </svg>
+);
+const EditIcon = () => (
+  <svg
+    className="h-5 w-5"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+    />
+  </svg>
+);
+const TrashIcon = () => (
+  <svg
+    className="h-5 w-5"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+    />
+  </svg>
+);
+const InboxIcon = () => (
+  <svg
+    className="h-8 w-8"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+    />
+  </svg>
+);
+const SendIcon = () => (
+  <svg
+    className="h-8 w-8"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+    />
+  </svg>
+);
+const MessageIcon = () => (
+  <svg
+    className="h-8 w-8"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+    />
+  </svg>
+);
+
+// Stat Card Component
+const StatCard = ({ icon, label, value }) => (
+  <div className="bg-indigo-50 p-4 rounded-xl flex items-center space-x-3">
+    <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">{icon}</div>
+    <div>
+      <h3 className="text-sm text-gray-500">{label}</h3>
+      <p className="text-xl font-bold text-indigo-800">{value}</p>
+    </div>
+  </div>
+);
 
 export default ActionsPage;

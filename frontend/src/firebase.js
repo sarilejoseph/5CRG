@@ -3,14 +3,15 @@ import { getDatabase } from "firebase/database";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBxYLrUpn81iMTDZsEBvvUepFWgauW2pmc",
-  authDomain: "thcrg-a79b3.firebaseapp.com",
-  projectId: "thcrg-a79b3",
-  storageBucket: "thcrg-a79b3.firebasestorage.app",
-  messagingSenderId: "369494608533",
-  appId: "1:369494608533:web:38a7634e7b36e83d66699c",
-  measurementId: "G-G448L7CGHB",
+  apiKey: "AIzaSyBOCQzMqCzsGxcNGIBfvclGlksL20faVgU",
+  authDomain: "farmmartapp-951fb.firebaseapp.com",
+  projectId: "farmmartapp-951fb",
+  storageBucket: "farmmartapp-951fb.appspot.com",
+  messagingSenderId: "1023068644817",
+  appId: "1:1023068644817:web:25916435cc0bad9fc82cf0",
+  measurementId: "G-VQXBLB4R9D",
 };
 
 let app;

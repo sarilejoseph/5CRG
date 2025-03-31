@@ -26,20 +26,23 @@ const MessageHistoryPage = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [viewMode, setViewMode] = useState("individual");
   const [allUsersData, setAllUsersData] = useState([]);
+  const [error, setError] = useState(null); // Added for error handling
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      if (user) checkUserRole(user.uid);
-      else {
+      if (user) {
+        checkUserRole(user.uid);
+      } else {
         setIsAdmin(false);
         setSelectedUser(null);
         setReceivedMessages([]);
         setSentMessages([]);
         setLoading(false);
+        setError(null);
       }
     });
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -47,85 +50,71 @@ const MessageHistoryPage = () => {
   }, [timeFilter, typeFilter, receivedMessages, sentMessages, activeTab]);
 
   const checkUserRole = async (uid) => {
-    const userRef = ref(database, `users/${uid}`);
-    const snapshot = await get(userRef);
-    const userData = snapshot.val();
-    const hasAdminAccess =
-      userData?.role === "admin" || userData?.role === "manager";
-    setIsAdmin(hasAdminAccess);
-    hasAdminAccess ? fetchAllUsers(uid) : fetchMessages(uid);
+    try {
+      const userRef = ref(database, `users/${uid}`);
+      const snapshot = await get(userRef);
+      if (!snapshot.exists()) {
+        setError("User data not found.");
+        setIsAdmin(false);
+        fetchMessages(uid); // Fetch individual messages anyway
+        return;
+      }
+      const userData = snapshot.val();
+      const hasAdminAccess =
+        userData?.role === "admin" || userData?.role === "manager";
+      setIsAdmin(hasAdminAccess);
+      if (hasAdminAccess) {
+        fetchAllUsers(uid);
+      } else {
+        fetchMessages(uid);
+      }
+    } catch (err) {
+      console.error("Error checking user role:", err);
+      setError("Permission denied or error fetching user role.");
+      setIsAdmin(false);
+      fetchMessages(uid); // Fallback to individual mode
+    }
   };
 
   const fetchAllUsers = (currentUserId) => {
     const usersRef = ref(database, "users");
-    onValue(usersRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const usersList = Object.entries(data).map(([uid, userData]) => ({
-          uid,
-          name: userData.name || userData.email || uid,
-          email: userData.email,
-        }));
-        setAllUsers(usersList);
-        setSelectedUser(currentUserId);
+    onValue(
+      usersRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const usersList = Object.entries(data).map(([uid, userData]) => ({
+            uid,
+            name: userData.name || userData.email || uid,
+            email: userData.email,
+          }));
+          setAllUsers(usersList);
+          setSelectedUser(currentUserId);
+          fetchMessages(currentUserId); // Fetch messages for current user
+        } else {
+          setAllUsers([]);
+          setError("No users found.");
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error fetching all users:", err);
+        setError("Permission denied fetching all users.");
+        setLoading(false);
       }
-      fetchMessages(currentUserId);
-    });
+    );
   };
 
   const fetchMessages = (userId) => {
     setLoading(true);
+    setError(null);
     const receivedRef = ref(database, `users/${userId}/receivedMessages`);
-    onValue(receivedRef, (snapshot) => {
-      const data = snapshot.val();
-      const received = data
-        ? Object.entries(data).map(([key, value]) => {
-            // Determine subject based on type
-            let subject = "-";
-            switch (value.type) {
-              case "STL":
-              case "Letter":
-                subject = value.description || "-";
-                break;
-              case "Conference Notice":
-                subject = value.agenda || "-";
-                break;
-              case "LOI":
-                subject = value.title || "-";
-                break;
-              case "RAD":
-                subject = value.cite || "-";
-                break;
-              default:
-                subject = value.subject || "-";
-            }
-
-            return {
-              id: key,
-              ...value,
-              communicationType:
-                value.communicationType || value.type || "Unknown",
-              documentId: value.documentId || value.id || "-",
-              dateSent: value.dateSent || value.timestamp || Date.now(),
-              sender: value.sender || value.staffName || "Unknown",
-              receiver: value.receiver || "-",
-              subject, // Use normalized subject
-              dateReceived: value.dateReceived || value.timestamp || Date.now(),
-              channel: value.channel || "Unknown",
-              fileFormat: value.fileFormat || "Unknown",
-              hasAttachment: value.hasAttachment || false,
-            };
-          })
-        : [];
-      setReceivedMessages(received);
-      setFilteredReceivedMessages(received);
-
-      const sentRef = ref(database, `users/${userId}/sentMessages`);
-      onValue(sentRef, (snapshot) => {
+    onValue(
+      receivedRef,
+      (snapshot) => {
         const data = snapshot.val();
-        const sent = data
+        const received = data
           ? Object.entries(data).map(([key, value]) => {
-              // Determine subject based on type
               let subject = "-";
               switch (value.type) {
                 case "STL":
@@ -144,7 +133,6 @@ const MessageHistoryPage = () => {
                 default:
                   subject = value.subject || "-";
               }
-
               return {
                 id: key,
                 ...value,
@@ -152,143 +140,217 @@ const MessageHistoryPage = () => {
                   value.communicationType || value.type || "Unknown",
                 documentId: value.documentId || value.id || "-",
                 dateSent: value.dateSent || value.timestamp || Date.now(),
-                sender: value.sender || "Self",
+                sender: value.sender || value.staffName || "Unknown",
                 receiver: value.receiver || "-",
-                subject, // Use normalized subject
-                dateReceived: value.dateReceived || null,
+                subject,
+                dateReceived:
+                  value.dateReceived || value.timestamp || Date.now(),
                 channel: value.channel || "Unknown",
                 fileFormat: value.fileFormat || "Unknown",
                 hasAttachment: value.hasAttachment || false,
               };
             })
           : [];
-        setSentMessages(sent);
-        setFilteredSentMessages(sent);
+        setReceivedMessages(received);
+        setFilteredReceivedMessages(received);
 
-        setUniqueTypes([
-          ...new Set(
-            [...received, ...sent].map((msg) => msg.communicationType)
-          ),
-        ]);
+        const sentRef = ref(database, `users/${userId}/sentMessages`);
+        onValue(
+          sentRef,
+          (snapshot) => {
+            const data = snapshot.val();
+            const sent = data
+              ? Object.entries(data).map(([key, value]) => {
+                  let subject = "-";
+                  switch (value.type) {
+                    case "STL":
+                    case "Letter":
+                      subject = value.description || "-";
+                      break;
+                    case "Conference Notice":
+                      subject = value.agenda || "-";
+                      break;
+                    case "LOI":
+                      subject = value.title || "-";
+                      break;
+                    case "RAD":
+                      subject = value.cite || "-";
+                      break;
+                    default:
+                      subject = value.subject || "-";
+                  }
+                  return {
+                    id: key,
+                    ...value,
+                    communicationType:
+                      value.communicationType || value.type || "Unknown",
+                    documentId: value.documentId || value.id || "-",
+                    dateSent: value.dateSent || value.timestamp || Date.now(),
+                    sender: value.sender || "Self",
+                    receiver: value.receiver || "-",
+                    subject,
+                    dateReceived: value.dateReceived || null,
+                    channel: value.channel || "Unknown",
+                    fileFormat: value.fileFormat || "Unknown",
+                    hasAttachment: value.hasAttachment || false,
+                  };
+                })
+              : [];
+            setSentMessages(sent);
+            setFilteredSentMessages(sent);
+
+            setUniqueTypes([
+              ...new Set(
+                [...received, ...sent].map((msg) => msg.communicationType)
+              ),
+            ]);
+            setLoading(false);
+          },
+          (err) => {
+            console.error("Error fetching sent messages:", err);
+            setError("Permission denied fetching sent messages.");
+            setLoading(false);
+          }
+        );
+      },
+      (err) => {
+        console.error("Error fetching received messages:", err);
+        setError("Permission denied fetching received messages.");
         setLoading(false);
-      });
-    });
+      }
+    );
   };
 
   const fetchAllUsersData = () => {
     setLoading(true);
+    setError(null);
     const usersRef = ref(database, "users");
-    onValue(usersRef, (snapshot) => {
-      const usersData = snapshot.val();
-      if (!usersData) {
-        setAllUsersData([]);
+    onValue(
+      usersRef,
+      (snapshot) => {
+        const usersData = snapshot.val();
+        if (!usersData) {
+          setAllUsersData([]);
+          setLoading(false);
+          return;
+        }
+        const combinedData = [];
+        Promise.all(
+          Object.entries(usersData).map(([uid, userData]) =>
+            Promise.all([
+              get(ref(database, `users/${uid}/receivedMessages`)).then((snap) =>
+                snap.val()
+                  ? Object.entries(snap.val()).map(([msgId, msgData]) => {
+                      let subject = "-";
+                      switch (msgData.type) {
+                        case "STL":
+                        case "Letter":
+                          subject = msgData.description || "-";
+                          break;
+                        case "Conference Notice":
+                          subject = msgData.agenda || "-";
+                          break;
+                        case "LOI":
+                          subject = msgData.title || "-";
+                          break;
+                        case "RAD":
+                          subject = msgData.cite || "-";
+                          break;
+                        default:
+                          subject = msgData.subject || "-";
+                      }
+                      return {
+                        id: msgId,
+                        userId: uid,
+                        userName: userData.name || userData.email || uid,
+                        messageType: "received",
+                        ...msgData,
+                        communicationType:
+                          msgData.communicationType ||
+                          msgData.type ||
+                          "Unknown",
+                        documentId: msgData.documentId || msgData.id || "-",
+                        dateSent:
+                          msgData.dateSent || msgData.timestamp || Date.now(),
+                        sender:
+                          msgData.sender || msgData.staffName || "Unknown",
+                        receiver: msgData.receiver || "-",
+                        subject,
+                        dateReceived:
+                          msgData.dateReceived ||
+                          msgData.timestamp ||
+                          Date.now(),
+                        channel: msgData.channel || "Unknown",
+                        fileFormat: msgData.fileFormat || "Unknown",
+                        hasAttachment: msgData.hasAttachment || false,
+                      };
+                    })
+                  : []
+              ),
+              get(ref(database, `users/${uid}/sentMessages`)).then((snap) =>
+                snap.val()
+                  ? Object.entries(snap.val()).map(([msgId, msgData]) => {
+                      let subject = "-";
+                      switch (msgData.type) {
+                        case "STL":
+                        case "Letter":
+                          subject = msgData.description || "-";
+                          break;
+                        case "Conference Notice":
+                          subject = msgData.agenda || "-";
+                          break;
+                        case "LOI":
+                          subject = msgData.title || "-";
+                          break;
+                        case "RAD":
+                          subject = msgData.cite || "-";
+                          break;
+                        default:
+                          subject = msgData.subject || "-";
+                      }
+                      return {
+                        id: msgId,
+                        userId: uid,
+                        userName: userData.name || userData.email || uid,
+                        messageType: "sent",
+                        ...msgData,
+                        communicationType:
+                          msgData.communicationType ||
+                          msgData.type ||
+                          "Unknown",
+                        documentId: msgData.documentId || msgData.id || "-",
+                        dateSent:
+                          msgData.dateSent || msgData.timestamp || Date.now(),
+                        sender: msgData.sender || "Self",
+                        receiver: msgData.receiver || "-",
+                        subject,
+                        dateReceived: msgData.dateReceived || null,
+                        channel: msgData.channel || "Unknown",
+                        fileFormat: msgData.fileFormat || "Unknown",
+                        hasAttachment: msgData.hasAttachment || false,
+                      };
+                    })
+                  : []
+              ),
+            ]).then(([received, sent]) =>
+              combinedData.push(...received, ...sent)
+            )
+          )
+        ).then(() => {
+          combinedData.sort((a, b) => b.timestamp - a.timestamp);
+          setUniqueTypes([
+            ...new Set(combinedData.map((msg) => msg.communicationType)),
+          ]);
+          setAllUsersData(combinedData);
+          setLoading(false);
+        });
+      },
+      (err) => {
+        console.error("Error fetching all users data:", err);
+        setError("Permission denied fetching all users data.");
         setLoading(false);
-        return;
       }
-      const combinedData = [];
-      Promise.all(
-        Object.entries(usersData).map(([uid, userData]) =>
-          Promise.all([
-            get(ref(database, `users/${uid}/receivedMessages`)).then((snap) =>
-              snap.val()
-                ? Object.entries(snap.val()).map(([msgId, msgData]) => {
-                    // Normalize subject based on type
-                    let subject = "-";
-                    switch (msgData.type) {
-                      case "STL":
-                      case "Letter":
-                        subject = msgData.description || "-";
-                        break;
-                      case "Conference Notice":
-                        subject = msgData.agenda || "-";
-                        break;
-                      case "LOI":
-                        subject = msgData.title || "-";
-                        break;
-                      case "RAD":
-                        subject = msgData.cite || "-";
-                        break;
-                      default:
-                        subject = msgData.subject || "-";
-                    }
-                    return {
-                      id: msgId,
-                      userId: uid,
-                      userName: userData.name || userData.email || uid,
-                      messageType: "received",
-                      ...msgData,
-                      communicationType:
-                        msgData.communicationType || msgData.type || "Unknown",
-                      documentId: msgData.documentId || msgData.id || "-",
-                      dateSent:
-                        msgData.dateSent || msgData.timestamp || Date.now(),
-                      sender: msgData.sender || msgData.staffName || "Unknown",
-                      receiver: msgData.receiver || "-",
-                      subject, // Normalized subject
-                      dateReceived:
-                        msgData.dateReceived || msgData.timestamp || Date.now(),
-                      channel: msgData.channel || "Unknown",
-                      fileFormat: msgData.fileFormat || "Unknown",
-                      hasAttachment: msgData.hasAttachment || false,
-                    };
-                  })
-                : []
-            ),
-            get(ref(database, `users/${uid}/sentMessages`)).then((snap) =>
-              snap.val()
-                ? Object.entries(snap.val()).map(([msgId, msgData]) => {
-                    // Normalize subject based on type
-                    let subject = "-";
-                    switch (msgData.type) {
-                      case "STL":
-                      case "Letter":
-                        subject = msgData.description || "-";
-                        break;
-                      case "Conference Notice":
-                        subject = msgData.agenda || "-";
-                        break;
-                      case "LOI":
-                        subject = msgData.title || "-";
-                        break;
-                      case "RAD":
-                        subject = msgData.cite || "-";
-                        break;
-                      default:
-                        subject = msgData.subject || "-";
-                    }
-                    return {
-                      id: msgId,
-                      userId: uid,
-                      userName: userData.name || userData.email || uid,
-                      messageType: "sent",
-                      ...msgData,
-                      communicationType:
-                        msgData.communicationType || msgData.type || "Unknown",
-                      documentId: msgData.documentId || msgData.id || "-",
-                      dateSent:
-                        msgData.dateSent || msgData.timestamp || Date.now(),
-                      sender: msgData.sender || "Self",
-                      receiver: msgData.receiver || "-",
-                      subject, // Normalized subject
-                      dateReceived: msgData.dateReceived || null,
-                      channel: msgData.channel || "Unknown",
-                      fileFormat: msgData.fileFormat || "Unknown",
-                      hasAttachment: msgData.hasAttachment || false,
-                    };
-                  })
-                : []
-            ),
-          ]).then(([received, sent]) => combinedData.push(...received, ...sent))
-        )
-      ).then(() => {
-        combinedData.sort((a, b) => b.timestamp - a.timestamp);
-        setUniqueTypes([
-          ...new Set(combinedData.map((msg) => msg.communicationType)),
-        ]);
-        setAllUsersData(combinedData);
-        setLoading(false);
-      });
-    });
+    );
   };
 
   const applyFilters = () => {
@@ -499,9 +561,14 @@ const MessageHistoryPage = () => {
     }, 500);
     setShowPrintDropdown(false);
   };
+
   const toggleViewMode = (mode) => {
     setViewMode(mode);
-    mode === "all" ? fetchAllUsersData() : fetchMessages(selectedUser);
+    if (mode === "all" && isAdmin) {
+      fetchAllUsersData();
+    } else if (selectedUser) {
+      fetchMessages(selectedUser);
+    }
   };
 
   return (
@@ -510,6 +577,12 @@ const MessageHistoryPage = () => {
         <h1 className="text-3xl font-bold text-indigo-900 mb-2">
           Records & Reports
         </h1>
+
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
 
         {isAdmin && (
           <div className="mb-8 bg-white rounded-xl shadow-lg p-6">
@@ -806,8 +879,7 @@ const MessageHistoryPage = () => {
                             {activeTab === "received" ? "From" : "To"}
                           </th>
                           <th className="px-4 py-3">Type</th>
-                          <th className="px-4 py-3">Subject</th>{" "}
-                          {/* Changed from Message */}
+                          <th className="px-4 py-3">Subject</th>
                           <th className="px-4 py-3">Date</th>
                         </tr>
                       </thead>
@@ -822,10 +894,7 @@ const MessageHistoryPage = () => {
                                 : message.receiver}
                             </td>
                             <td className="px-4 py-4">{message.type}</td>
-                            <td className="px-4 py-4">
-                              {message.subject}
-                            </td>{" "}
-                            {/* Use normalized subject */}
+                            <td className="px-4 py-4">{message.subject}</td>
                             <td className="px-4 py-4">
                               {formatTimestamp(message.timestamp)}
                             </td>

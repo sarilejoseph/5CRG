@@ -5,8 +5,16 @@ import {
   push,
   get,
   serverTimestamp,
+  query,
+  orderByChild,
+  limitToLast,
 } from "firebase/database";
-import { getStorage, ref as storageRef, uploadBytes } from "firebase/storage";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "../firebase";
 
@@ -33,7 +41,6 @@ const RecordForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const [nextId, setNextId] = useState("");
   const fileInputRef = useRef(null);
   const database = getDatabase(app);
   const storage = getStorage(app);
@@ -50,26 +57,30 @@ const RecordForm = () => {
           sender: messageType === "sent" ? userIdentifier : "",
           receiver: messageType === "received" ? userIdentifier : "",
           staffName: userIdentifier,
-          id: nextId || "",
         }));
-        generateNextId(currentUser.uid);
+        generateNextId(currentUser.uid); // Call only if user exists
+      } else {
+        setUser(null);
+        setFormData((prev) => ({
+          ...prev,
+          id: "",
+          sender: "",
+          receiver: "",
+          staffName: "",
+        }));
       }
     });
     return () => unsubscribe();
-  }, [messageType, nextId]);
+  }, [messageType]);
 
   useEffect(() => {
-    // Reset the relevant fields based on type
     const type = formData.type;
     const newFormData = { ...formData };
-
-    // Clear all content fields first
     newFormData.description = "";
     newFormData.cite = "";
     newFormData.agenda = "";
     newFormData.title = "";
 
-    // Set default file format based on type
     switch (type) {
       case "STL":
         newFormData.fileFormat = "PDF";
@@ -89,7 +100,6 @@ const RecordForm = () => {
       default:
         newFormData.fileFormat = "PDF";
     }
-
     setFormData(newFormData);
   }, [formData.type]);
 
@@ -99,24 +109,39 @@ const RecordForm = () => {
         `users/${userId}/sentMessages`,
         `users/${userId}/receivedMessages`,
       ];
-      let maxId = 0;
+
+      let highestId = 0;
       for (const path of paths) {
-        const snapshot = await get(ref(database, path));
+        const messagesRef = ref(database, path);
+        const lastMessageQuery = query(
+          messagesRef,
+          orderByChild("id"),
+          limitToLast(1)
+        );
+        const snapshot = await get(lastMessageQuery);
+
         if (snapshot.exists()) {
           snapshot.forEach((child) => {
-            const data = child.val();
-            if (data.id && !isNaN(parseInt(data.id.slice(1)))) {
-              const idNum = parseInt(data.id.slice(1), 10);
-              if (idNum > maxId) maxId = idNum;
+            const id = child.val().id;
+            if (id && id.startsWith("O")) {
+              const num = parseInt(id.slice(1), 10);
+              if (!isNaN(num) && num > highestId) {
+                highestId = num;
+              }
             }
           });
         }
       }
-      const newId = `O${String(maxId + 1).padStart(5, "0")}`;
-      setNextId(newId);
+
+      const newIdNum = highestId + 1;
+      const newId = `O${String(newIdNum).padStart(5, "0")}`;
+
       setFormData((prev) => ({ ...prev, id: newId }));
     } catch (error) {
       console.error("Error generating ID:", error);
+      setError("Failed to generate ID. Using temporary ID.");
+      const tempId = `O${String(Date.now()).slice(-6)}`;
+      setFormData((prev) => ({ ...prev, id: tempId }));
     }
   };
 
@@ -127,13 +152,15 @@ const RecordForm = () => {
 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files[0];
-    if (!selectedFile) return;
-    setFile(selectedFile);
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
   };
 
   const resetForm = () => {
+    const userIdentifier = user?.displayName || user?.email || "";
     setFormData({
-      id: nextId,
+      id: "",
       type: "STL",
       channel: "Email",
       timestamp: "",
@@ -141,13 +168,9 @@ const RecordForm = () => {
       cite: "",
       agenda: "",
       title: "",
-      sender:
-        messageType === "sent" ? user?.displayName || user?.email || "" : "",
-      receiver:
-        messageType === "received"
-          ? user?.displayName || user?.email || ""
-          : "",
-      staffName: user?.displayName || user?.email || "",
+      sender: messageType === "sent" ? userIdentifier : "",
+      receiver: messageType === "received" ? userIdentifier : "",
+      staffName: userIdentifier,
       customTypeValue: "",
       customChannelValue: "",
       fileFormat: "PDF",
@@ -155,6 +178,7 @@ const RecordForm = () => {
     setFile(null);
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = null;
+    if (user) generateNextId(user.uid);
   };
 
   const handleSubmit = async (e) => {
@@ -164,9 +188,11 @@ const RecordForm = () => {
       return;
     }
 
-    let requiredFields = ["id", "timestamp"];
-
-    // Add type-specific required fields
+    const requiredFields = [
+      "id",
+      "timestamp",
+      messageType === "sent" ? "receiver" : "sender",
+    ];
     switch (formData.type) {
       case "STL":
       case "Letter":
@@ -182,9 +208,6 @@ const RecordForm = () => {
         requiredFields.push("cite");
         break;
     }
-
-    // Add sender/receiver based on message type
-    requiredFields.push(messageType === "sent" ? "receiver" : "sender");
 
     if (requiredFields.some((field) => !formData[field])) {
       setError("Please fill in all required fields");
@@ -213,7 +236,6 @@ const RecordForm = () => {
         createdAt: serverTimestamp(),
       };
 
-      // Add type-specific fields
       switch (formData.type) {
         case "STL":
         case "Letter":
@@ -230,35 +252,53 @@ const RecordForm = () => {
           break;
       }
 
-      if (file) {
-        const fileRef = storageRef(
-          storage,
-          `users/${user.uid}/files/${file.name}`
-        );
-        await uploadBytes(fileRef, file);
-        recordData.fileUrl = `users/${user.uid}/files/${file.name}`;
-        recordData.filename = file.name;
-      }
-
       const dbRef = ref(
         database,
         `users/${user.uid}/${
           messageType === "sent" ? "sentMessages" : "receivedMessages"
         }`
       );
+
+      if (file) {
+        const fileExtension = file.name.split(".").pop().toLowerCase();
+        const validExtensions = {
+          PDF: ["pdf"],
+          JPEG: ["jpg", "jpeg"],
+          "MS Word": ["doc", "docx"],
+          PNG: ["png"],
+        }[formData.fileFormat];
+
+        if (!validExtensions.includes(fileExtension)) {
+          throw new Error(
+            `Invalid file format. Expected ${formData.fileFormat}`
+          );
+        }
+
+        const fileName = `${formData.id}_${Date.now()}.${fileExtension}`;
+        const filePath = `users/${user.uid}/files/${fileName}`;
+        const storageReference = storageRef(storage, filePath);
+
+        const uploadResult = await uploadBytes(storageReference, file);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+
+        recordData.fileUrl = downloadURL;
+        recordData.filename = fileName;
+        recordData.filePath = filePath;
+      }
+
       await push(dbRef, recordData);
 
-      resetForm();
       setSuccess(true);
+      resetForm();
       setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
-      setError("Failed to save record. Please try again.");
+      console.error("Error submitting form:", error);
+      setError(`Failed to save record: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper function to render the appropriate content field based on type
   const renderContentField = () => {
     switch (formData.type) {
       case "STL":
@@ -598,6 +638,17 @@ const RecordForm = () => {
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 className="w-full p-2 border rounded-md"
+                accept={
+                  formData.fileFormat === "PDF"
+                    ? ".pdf"
+                    : formData.fileFormat === "JPEG"
+                    ? ".jpg,.jpeg"
+                    : formData.fileFormat === "MS Word"
+                    ? ".doc,.docx"
+                    : formData.fileFormat === "PNG"
+                    ? ".png"
+                    : ""
+                }
               />
             </div>
           </div>

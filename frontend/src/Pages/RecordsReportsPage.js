@@ -26,7 +26,7 @@ const MessageHistoryPage = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [viewMode, setViewMode] = useState("individual");
   const [allUsersData, setAllUsersData] = useState([]);
-  const [error, setError] = useState(null); // Added for error handling
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -56,7 +56,7 @@ const MessageHistoryPage = () => {
       if (!snapshot.exists()) {
         setError("User data not found.");
         setIsAdmin(false);
-        fetchMessages(uid); // Fetch individual messages anyway
+        fetchMessages(uid);
         return;
       }
       const userData = snapshot.val();
@@ -72,7 +72,7 @@ const MessageHistoryPage = () => {
       console.error("Error checking user role:", err);
       setError("Permission denied or error fetching user role.");
       setIsAdmin(false);
-      fetchMessages(uid); // Fallback to individual mode
+      fetchMessages(uid);
     }
   };
 
@@ -90,7 +90,7 @@ const MessageHistoryPage = () => {
           }));
           setAllUsers(usersList);
           setSelectedUser(currentUserId);
-          fetchMessages(currentUserId); // Fetch messages for current user
+          fetchMessages(currentUserId);
         } else {
           setAllUsers([]);
           setError("No users found.");
@@ -148,6 +148,7 @@ const MessageHistoryPage = () => {
                 channel: value.channel || "Unknown",
                 fileFormat: value.fileFormat || "Unknown",
                 hasAttachment: value.hasAttachment || false,
+                fileUrl: value.fileUrl,
               };
             })
           : [];
@@ -193,6 +194,7 @@ const MessageHistoryPage = () => {
                     channel: value.channel || "Unknown",
                     fileFormat: value.fileFormat || "Unknown",
                     hasAttachment: value.hasAttachment || false,
+                    fileUrl: value.fileUrl,
                   };
                 })
               : [];
@@ -283,6 +285,7 @@ const MessageHistoryPage = () => {
                         channel: msgData.channel || "Unknown",
                         fileFormat: msgData.fileFormat || "Unknown",
                         hasAttachment: msgData.hasAttachment || false,
+                        fileUrl: msgData.fileUrl,
                       };
                     })
                   : []
@@ -328,6 +331,7 @@ const MessageHistoryPage = () => {
                         channel: msgData.channel || "Unknown",
                         fileFormat: msgData.fileFormat || "Unknown",
                         hasAttachment: msgData.hasAttachment || false,
+                        fileUrl: msgData.fileUrl,
                       };
                     })
                   : []
@@ -520,6 +524,17 @@ const MessageHistoryPage = () => {
               font-size: 12px;
               color: #6c757d;
             }
+            /* Fixed image sizing in tables */
+            img {
+              max-width: 100px;
+              max-height: 100px;
+              object-fit: contain;
+              display: block;
+            }
+            /* Ensure attachment cell has fixed width */
+            td:last-child {
+              width: 120px;
+            }
           </style>
         </head>
         <body>
@@ -561,7 +576,6 @@ const MessageHistoryPage = () => {
     }, 500);
     setShowPrintDropdown(false);
   };
-
   const toggleViewMode = (mode) => {
     setViewMode(mode);
     if (mode === "all" && isAdmin) {
@@ -773,6 +787,7 @@ const MessageHistoryPage = () => {
                             <th className="px-4 py-3">Date Received</th>
                             <th className="px-4 py-3">Channel</th>
                             <th className="px-4 py-3">Format</th>
+                            <th className="px-4 py-3">Attachment</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -808,6 +823,31 @@ const MessageHistoryPage = () => {
                               <td className="px-4 py-4">
                                 {message.fileFormat || "Unknown"}
                               </td>
+                              <td className="px-4 py-4">
+                                {message.fileUrl ? (
+                                  message.fileFormat.toLowerCase() === "png" ||
+                                  message.fileFormat.toLowerCase() === "jpg" ||
+                                  message.fileFormat.toLowerCase() ===
+                                    "jpeg" ? (
+                                    <img
+                                      src={message.fileUrl}
+                                      alt="Attachment"
+                                      className="max-w-[100px] max-h-[100px] object-cover"
+                                    />
+                                  ) : (
+                                    <a
+                                      href={message.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 underline"
+                                    >
+                                      View File
+                                    </a>
+                                  )
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -831,6 +871,7 @@ const MessageHistoryPage = () => {
                             <th className="px-4 py-3">Date Sent</th>
                             <th className="px-4 py-3">Channel</th>
                             <th className="px-4 py-3">Format</th>
+                            <th className="px-4 py-3">Attachment</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -857,6 +898,31 @@ const MessageHistoryPage = () => {
                               <td className="px-4 py-4">
                                 {message.fileFormat || "Unknown"}
                               </td>
+                              <td className="px-4 py-4">
+                                {message.fileUrl ? (
+                                  message.fileFormat.toLowerCase() === "png" ||
+                                  message.fileFormat.toLowerCase() === "jpg" ||
+                                  message.fileFormat.toLowerCase() ===
+                                    "jpeg" ? (
+                                    <img
+                                      src={message.fileUrl}
+                                      alt="Attachment"
+                                      className="max-w-[100px] max-h-[100px] object-cover"
+                                    />
+                                  ) : (
+                                    <a
+                                      href={message.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 underline"
+                                    >
+                                      View File
+                                    </a>
+                                  )
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -881,6 +947,7 @@ const MessageHistoryPage = () => {
                           <th className="px-4 py-3">Type</th>
                           <th className="px-4 py-3">Subject</th>
                           <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3">Attachment</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -897,6 +964,30 @@ const MessageHistoryPage = () => {
                             <td className="px-4 py-4">{message.subject}</td>
                             <td className="px-4 py-4">
                               {formatTimestamp(message.timestamp)}
+                            </td>
+                            <td className="px-4 py-4">
+                              {message.fileUrl ? (
+                                message.fileFormat.toLowerCase() === "png" ||
+                                message.fileFormat.toLowerCase() === "jpg" ||
+                                message.fileFormat.toLowerCase() === "jpeg" ? (
+                                  <img
+                                    src={message.fileUrl}
+                                    alt="Attachment"
+                                    className="max-w-[100px] max-h-[100px] object-cover"
+                                  />
+                                ) : (
+                                  <a
+                                    href={message.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 underline"
+                                  >
+                                    View File
+                                  </a>
+                                )
+                              ) : (
+                                "-"
+                              )}
                             </td>
                           </tr>
                         ))}

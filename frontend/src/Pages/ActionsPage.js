@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { ref, onValue, remove, update, get } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
 import { database, auth } from "../firebase";
+import { ref as storageRef, getDownloadURL } from "firebase/storage";
+import { storage } from "../firebase"; // Ensure you export `storage` from your firebase config
 
 const ActionsPage = () => {
   const [messages, setMessages] = useState({ received: [], sent: [] });
@@ -31,12 +33,12 @@ const ActionsPage = () => {
     const term = searchTerm.toLowerCase();
     setFilteredMessages({
       received: messages.received.filter((m) =>
-        [m.sender, m.type, m.subject, m.staffName].some((v) =>
+        [m.sender, m.type, m.description, m.receiver].some((v) =>
           v?.toLowerCase().includes(term)
         )
       ),
       sent: messages.sent.filter((m) =>
-        [m.receiver, m.type, m.subject, m.staffName].some((v) =>
+        [m.receiver, m.type, m.description, m.sender].some((v) =>
           v?.toLowerCase().includes(term)
         )
       ),
@@ -51,7 +53,7 @@ const ActionsPage = () => {
     setIsAdmin(admin);
     fetchAllUsers();
     setSelectedUser(uid);
-    fetchMessages(admin ? null : uid); // Admin fetches all, non-admin fetches own
+    fetchMessages(admin ? null : uid);
   };
 
   const resetState = () => {
@@ -78,24 +80,11 @@ const ActionsPage = () => {
 
   const fetchMessages = (userId) => {
     setLoading(true);
-    const normalizeSubject = (msg) => {
-      switch (msg.type) {
-        case "STL":
-        case "Letter":
-          return msg.description || "-";
-        case "Conference Notice":
-          return msg.agenda || "-";
-        case "LOI":
-          return msg.title || "-";
-        case "RAD":
-          return msg.cite || "-";
-        default:
-          return msg.subject || "-";
-      }
+    const normalizeDescription = (msg) => {
+      return msg.description || "-";
     };
 
     if (isAdmin && !userId) {
-      // Admin fetches all users' data
       onValue(ref(database, "users"), (snapshot) => {
         const usersData = snapshot.val();
         if (!usersData) return setMessages({ received: [], sent: [] });
@@ -111,7 +100,7 @@ const ActionsPage = () => {
               id,
               uid,
               ...m,
-              subject: normalizeSubject(m),
+              description: normalizeDescription(m),
             }))
           );
           allSent.push(
@@ -119,7 +108,7 @@ const ActionsPage = () => {
               id,
               uid,
               ...m,
-              subject: normalizeSubject(m),
+              description: normalizeDescription(m),
             }))
           );
         });
@@ -128,7 +117,6 @@ const ActionsPage = () => {
         setLoading(false);
       });
     } else {
-      // Non-admin fetches own data
       onValue(ref(database, `users/${userId}/receivedMessages`), (snapshot) => {
         const data = snapshot.val();
         setMessages((prev) => ({
@@ -138,7 +126,7 @@ const ActionsPage = () => {
                 id,
                 uid: userId,
                 ...m,
-                subject: normalizeSubject(m),
+                description: normalizeDescription(m),
               }))
             : [],
         }));
@@ -153,7 +141,7 @@ const ActionsPage = () => {
                 id,
                 uid: userId,
                 ...m,
-                subject: normalizeSubject(m),
+                description: normalizeDescription(m),
               }))
             : [],
         }));
@@ -164,19 +152,61 @@ const ActionsPage = () => {
 
   const formatTimestamp = (ts) => new Date(ts).toLocaleString();
 
+  const handleDownload = async (filePath, filename) => {
+    try {
+      // Assuming m.fileUrl is the full URL; extract the path if needed
+      const fileReference = storageRef(storage, filePath); // Use the file path stored in your database
+      const url = await getDownloadURL(fileReference);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  };
+
   const handleAction = (action, message) => {
     const path = `users/${message.uid}/${activeTab}Messages/${message.id}`;
-    if (action === "delete")
-      remove(ref(database, path)).then(() => setModal(null));
-    if (action === "edit")
-      update(ref(database, path), modal.data).then(() => setModal(null));
+    if (action === "delete") {
+      remove(ref(database, path))
+        .then(() => {
+          setModal(null);
+          fetchMessages(
+            isAdmin && selectedUser === "all" ? null : selectedUser
+          );
+        })
+        .catch((error) => console.error("Delete failed:", error));
+    }
+    if (action === "edit") {
+      update(ref(database, path), modal.data)
+        .then(() => {
+          setModal(null);
+          fetchMessages(
+            isAdmin && selectedUser === "all" ? null : selectedUser
+          );
+        })
+        .catch((error) => console.error("Update failed:", error));
+    }
   };
 
   const openModal = (type, message) =>
     setModal({
       type,
       message,
-      data: { type: message.type, subject: message.subject },
+      data: {
+        ...message,
+        channel: message.channel || "",
+        description: message.description || "",
+        fileFormat: message.fileFormat || "",
+        fileUrl: message.fileUrl || "",
+        filename: message.filename || "",
+        receiver: message.receiver || "",
+        sender: message.sender || "",
+      },
     });
 
   const Modal = () => {
@@ -185,7 +215,7 @@ const ActionsPage = () => {
 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl">
+        <div className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
           {type === "view" && (
             <>
               <h2 className="text-xl font-bold text-indigo-800 mb-4">
@@ -196,23 +226,44 @@ const ActionsPage = () => {
                   <strong>ID:</strong> {message.id}
                 </p>
                 <p>
-                  <strong>
-                    {activeTab === "received" ? "Sender" : "Receiver"}:
-                  </strong>{" "}
-                  {message[activeTab === "received" ? "sender" : "receiver"]}
+                  <strong>Channel:</strong> {message.channel}
+                </p>
+                <p>
+                  <strong>Sender:</strong> {message.sender}
+                </p>
+                <p>
+                  <strong>Receiver:</strong> {message.receiver}
                 </p>
                 <p>
                   <strong>Type:</strong> {message.type}
                 </p>
                 <p>
-                  <strong>Subject:</strong> {message.subject}
+                  <strong>Description:</strong> {message.description}
                 </p>
                 <p>
-                  <strong>Time:</strong> {formatTimestamp(message.timestamp)}
+                  <strong>File Format:</strong> {message.fileFormat}
                 </p>
                 <p>
-                  <strong>Staff:</strong> {message.staffName}
+                  <strong>Time:</strong> {formatTimestamp(message.createdAt)}
                 </p>
+                {message.fileUrl && (
+                  <div>
+                    <strong>Image/File:</strong>
+                    <img
+                      src={message.fileUrl}
+                      alt={message.filename}
+                      className="mt-2 max-w-full h-auto rounded-lg"
+                    />
+                    <button
+                      onClick={() =>
+                        handleDownload(message.fileUrl, message.filename)
+                      }
+                      className="mt-2 bg-green-600 text-white px-4 py-1 rounded-lg flex items-center"
+                    >
+                      <DownloadIcon className="mr-2" /> Download
+                    </button>
+                  </div>
+                )}
                 {isAdmin && (
                   <p>
                     <strong>User ID:</strong> {message.uid}
@@ -232,28 +283,85 @@ const ActionsPage = () => {
               <h2 className="text-xl font-bold text-indigo-800 mb-4">
                 Edit Message
               </h2>
-              <input
-                className="w-full p-2 border rounded-lg mb-2"
-                value={modal.data.type}
-                onChange={(e) =>
-                  setModal({
-                    ...modal,
-                    data: { ...modal.data, type: e.target.value },
-                  })
-                }
-                placeholder="Type"
-              />
-              <textarea
-                className="w-full p-2 border rounded-lg min-h-[100px]"
-                value={modal.data.subject}
-                onChange={(e) =>
-                  setModal({
-                    ...modal,
-                    data: { ...modal.data, subject: e.target.value },
-                  })
-                }
-                placeholder="Subject"
-              />
+              <div className="space-y-3">
+                <input
+                  className="w-full p-2 border rounded-lg"
+                  value={modal.data.channel}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, channel: e.target.value },
+                    })
+                  }
+                  placeholder="Channel"
+                />
+                <input
+                  className="w-full p-2 border rounded-lg"
+                  value={modal.data.sender}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, sender: e.target.value },
+                    })
+                  }
+                  placeholder="Sender"
+                />
+                <input
+                  className="w-full p-2 border rounded-lg"
+                  value={modal.data.receiver}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, receiver: e.target.value },
+                    })
+                  }
+                  placeholder="Receiver"
+                />
+                <input
+                  className="w-full p-2 border rounded-lg"
+                  value={modal.data.type}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, type: e.target.value },
+                    })
+                  }
+                  placeholder="Type"
+                />
+                <textarea
+                  className="w-full p-2 border rounded-lg min-h-[100px]"
+                  value={modal.data.description}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, description: e.target.value },
+                    })
+                  }
+                  placeholder="Description"
+                />
+                <input
+                  className="w-full p-2 border rounded-lg"
+                  value={modal.data.fileFormat}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, fileFormat: e.target.value },
+                    })
+                  }
+                  placeholder="File Format"
+                />
+                <input
+                  className="w-full p-2 border rounded-lg"
+                  value={modal.data.fileUrl}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      data: { ...modal.data, fileUrl: e.target.value },
+                    })
+                  }
+                  placeholder="File URL"
+                />
+              </div>
               <div className="mt-4 flex justify-end space-x-2">
                 <button
                   className="px-4 py-2 bg-gray-200 rounded-lg"
@@ -372,10 +480,10 @@ const ActionsPage = () => {
                     Type
                   </th>
                   <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                    Subject
+                    Description
                   </th>
                   <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                    Staff
+                    Image
                   </th>
                   <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
                     Time
@@ -413,11 +521,31 @@ const ActionsPage = () => {
                         </span>
                       </td>
                       <td className="px-4 py-2 truncate max-w-xs">
-                        {m.subject}
+                        {m.description}
                       </td>
-                      <td className="px-4 py-2">{m.staffName || "Unknown"}</td>
                       <td className="px-4 py-2">
-                        {formatTimestamp(m.timestamp)}
+                        {m.fileUrl ? (
+                          <div className="flex items-center space-x-2">
+                            <img
+                              src={m.fileUrl}
+                              alt={m.filename}
+                              className="w-16 h-16 object-cover rounded"
+                            />
+                            <button
+                              onClick={() =>
+                                handleDownload(m.fileUrl, m.filename)
+                              }
+                              className="text-green-600"
+                            >
+                              <DownloadIcon />
+                            </button>
+                          </div>
+                        ) : (
+                          "No Image"
+                        )}
+                      </td>
+                      <td className="px-4 py-2">
+                        {formatTimestamp(m.createdAt || m.timestamp)}
                       </td>
                       {isAdmin && <td className="px-4 py-2">{m.uid}</td>}
                       <td className="px-4 py-2 text-right space-x-2">
@@ -518,6 +646,21 @@ const TrashIcon = () => (
     />
   </svg>
 );
+const DownloadIcon = () => (
+  <svg
+    className="h-5 w-5"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+    />
+  </svg>
+);
 const InboxIcon = () => (
   <svg
     className="h-8 w-8"
@@ -564,7 +707,6 @@ const MessageIcon = () => (
   </svg>
 );
 
-// Stat Card Component
 const StatCard = ({ icon, label, value }) => (
   <div className="bg-indigo-50 p-4 rounded-xl flex items-center space-x-3">
     <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">{icon}</div>

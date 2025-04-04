@@ -1,716 +1,1043 @@
-import React, { useState, useEffect } from "react";
-import { ref, onValue, remove, update, get } from "firebase/database";
-import { onAuthStateChanged } from "firebase/auth";
-import { database, auth, storage } from "../firebase";
-import { ref as storageRef, getDownloadURL } from "firebase/storage";
+import React, { useState, useEffect, useRef } from "react";
+import { getDatabase, ref, onValue, get, set, remove } from "firebase/database";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
+import { app } from "../firebase";
+import { FaEye, FaEdit, FaTrash, FaDownload } from "react-icons/fa";
 
-// Icons as separate components to reduce repetition
-const Icon = ({ children, className = "" }) => (
-  <svg
-    className={`h-5 w-5 ${className}`}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-  >
-    {children}
-  </svg>
-);
+const database = getDatabase(app);
+const auth = getAuth(app);
+const storage = getStorage(app);
 
-const icons = {
-  eye: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-12.542 0C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-    />
-  ),
-  edit: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-    />
-  ),
-  trash: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-    />
-  ),
-  inbox: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293H6.586a1 1 0 00-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-    />
-  ),
-  send: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-    />
-  ),
-  message: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-    />
-  ),
-};
-
-// Reusable Modal component
-const Modal = ({ isOpen, onClose, title, children, actions }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white p-6 rounded-xl max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-bold text-indigo-800 mb-4">{title}</h2>
-        {children}
-        <div className="mt-4 flex justify-end space-x-2">{actions}</div>
-      </div>
-    </div>
-  );
-};
-
-// StatCard Component
-const StatCard = ({ icon, label, value }) => (
-  <div className="bg-indigo-50 p-4 rounded-xl flex items-center space-x-3">
-    <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
-      <Icon className="h-8 w-8">{icon}</Icon>
-    </div>
-    <div>
-      <h3 className="text-sm text-gray-500">{label}</h3>
-      <p className="text-xl font-bold text-indigo-800">{value}</p>
-    </div>
-  </div>
-);
-
-const ActionsPage = () => {
-  const [messages, setMessages] = useState({ received: [], sent: [] });
-  const [filteredMessages, setFilteredMessages] = useState({
-    received: [],
-    sent: [],
-  });
+const ActionPage = () => {
+  const [allMessages, setAllMessages] = useState([]);
+  const [filteredMessages, setFilteredMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("received");
-  const [modalState, setModalState] = useState({
-    isOpen: false,
-    type: null,
-    message: null,
-    data: {},
-  });
   const [isAdmin, setIsAdmin] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [allUsers, setAllUsers] = useState([]);
+  const [timeFilter, setTimeFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState("all");
+  const [messageDirection, setMessageDirection] = useState("all"); // New state for toggle
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [uniqueUsers, setUniqueUsers] = useState([]);
+  const [editMessage, setEditMessage] = useState(null);
+  const [viewMessage, setViewMessage] = useState(null);
+  const [error, setError] = useState(null);
+  const [newFile, setNewFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        checkUserRole(currentUser.uid);
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      if (user) checkUserRole(user.uid);
+      else {
         setIsAdmin(false);
-        setSelectedUser(null);
-        setMessages({ received: [], sent: [] });
-        setFilteredMessages({ received: [], sent: [] });
+        setAllMessages([]);
         setLoading(false);
+        setError("Please log in to view data.");
       }
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const term = searchTerm.toLowerCase();
-    setFilteredMessages({
-      received: messages.received.filter((m) =>
-        Object.values(m).some(
-          (v) => v && typeof v === "string" && v.toLowerCase().includes(term)
-        )
-      ),
-      sent: messages.sent.filter((m) =>
-        Object.values(m).some(
-          (v) => v && typeof v === "string" && v.toLowerCase().includes(term)
-        )
-      ),
-    });
-  }, [searchTerm, messages]);
+    applyFilters();
+  }, [timeFilter, userFilter, messageDirection, allMessages]);
 
   const checkUserRole = async (uid) => {
     try {
       const userRef = ref(database, `users/${uid}`);
       const snapshot = await get(userRef);
-      const userData = snapshot.val();
-
-      if (!userData) {
+      if (!snapshot.exists()) {
+        setError("User data not found.");
+        setIsAdmin(false);
         setLoading(false);
         return;
       }
-
-      const admin = userData?.role === "admin" || userData?.role === "manager";
-      setIsAdmin(admin);
-
-      if (admin) {
-        fetchAllUsers();
-        setSelectedUser("all");
-        fetchMessages(null);
-      } else {
-        setSelectedUser(uid);
-        fetchMessages(uid);
-      }
-    } catch (error) {
-      console.error("Error checking user role:", error);
+      const userData = snapshot.val();
+      setIsAdmin(userData?.role === "admin");
+      fetchAllMessages();
+    } catch (err) {
+      console.error("Error checking user role:", err);
+      setError("Error fetching user role.");
+      setIsAdmin(false);
       setLoading(false);
     }
   };
 
-  const fetchAllUsers = () => {
+  const fetchAllMessages = () => {
+    setLoading(true);
+    setError(null);
+    const usersRef = ref(database, "users");
     onValue(
-      ref(database, "users"),
+      usersRef,
       (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          setAllUsers(
-            Object.entries(data).map(([uid, d]) => ({
-              uid,
-              name: d.name || d.email || uid,
-              email: d.email,
-            }))
-          );
+        const usersData = snapshot.val();
+        if (!usersData) {
+          setAllMessages([]);
+          setLoading(false);
+          return;
         }
+        const combinedData = [];
+        Object.entries(usersData).forEach(([uid, userData]) => {
+          const received = userData.receivedMessages || {};
+          const sent = userData.sentMessages || {};
+          Object.entries(received).forEach(([msgId, msgData]) => {
+            let subject = "-";
+            switch (msgData.type) {
+              case "STL":
+              case "Letter":
+                subject = msgData.description || "-";
+                break;
+              case "Conference Notice":
+                subject = msgData.agenda || "-";
+                break;
+              case "LOI":
+                subject = msgData.title || "-";
+                break;
+              case "RAD":
+                subject = msgData.cite || "-";
+                break;
+              default:
+                subject = msgData.subject || "-";
+            }
+            combinedData.push({
+              id: msgId,
+              userId: uid,
+              userName: userData.name || userData.email || uid,
+              messageType: "received",
+              ...msgData,
+              communicationType:
+                msgData.communicationType || msgData.type || "Unknown",
+              documentId: msgData.documentId || msgData.id || "-",
+              dateSent: msgData.dateSent || msgData.timestamp || Date.now(),
+              sender: msgData.sender || msgData.staffName || "Unknown",
+              receiver: msgData.receiver || "-",
+              subject,
+              dateReceived:
+                msgData.dateReceived || msgData.timestamp || Date.now(),
+              channel: msgData.channel || "Unknown",
+              fileFormat: msgData.fileFormat || "Unknown",
+              hasAttachment: msgData.hasAttachment || false,
+              fileUrl: msgData.fileUrl,
+            });
+          });
+          Object.entries(sent).forEach(([msgId, msgData]) => {
+            let subject = "-";
+            switch (msgData.type) {
+              case "STL":
+              case "Letter":
+                subject = msgData.description || "-";
+                break;
+              case "Conference Notice":
+                subject = msgData.agenda || "-";
+                break;
+              case "LOI":
+                subject = msgData.title || "-";
+                break;
+              case "RAD":
+                subject = msgData.cite || "-";
+                break;
+              default:
+                subject = msgData.subject || "-";
+            }
+            combinedData.push({
+              id: msgId,
+              userId: uid,
+              userName: userData.name || userData.email || uid,
+              messageType: "sent",
+              ...msgData,
+              communicationType:
+                msgData.communicationType || msgData.type || "Unknown",
+              documentId: msgData.documentId || msgData.id || "-",
+              dateSent: msgData.dateSent || msgData.timestamp || Date.now(),
+              sender: msgData.sender || "Self",
+              receiver: msgData.receiver || "-",
+              subject,
+              dateReceived: msgData.dateReceived || null,
+              channel: msgData.channel || "Unknown",
+              fileFormat: msgData.fileFormat || "Unknown",
+              hasAttachment: msgData.hasAttachment || false,
+              fileUrl: msgData.fileUrl,
+            });
+          });
+        });
+        combinedData.sort((a, b) => b.dateSent - a.dateSent);
+        setAllMessages(combinedData);
+        setFilteredMessages(combinedData);
+        setUniqueUsers([...new Set(combinedData.map((msg) => msg.userName))]);
+        setLoading(false);
       },
-      { onlyOnce: true }
+      (err) => {
+        console.error("Error fetching messages:", err);
+        setError("Permission denied fetching data.");
+        setLoading(false);
+      }
     );
   };
 
-  const fetchMessages = (userId) => {
-    setLoading(true);
-
-    const processMessages = (type, data, uid) => {
-      if (!data) return [];
-      return Object.entries(data).map(([id, m]) => ({
-        id,
-        uid,
-        ...m,
-        description: m.description || "-",
-      }));
-    };
-
-    if (isAdmin && !userId) {
-      const usersRef = ref(database, "users");
-      onValue(
-        usersRef,
-        (snapshot) => {
-          const usersData = snapshot.val();
-          if (!usersData) {
-            setMessages({ received: [], sent: [] });
-            setLoading(false);
-            return;
-          }
-
-          const allReceived = [];
-          const allSent = [];
-
-          Object.entries(usersData).forEach(([uid, userData]) => {
-            if (userData.receivedMessages) {
-              allReceived.push(
-                ...processMessages("received", userData.receivedMessages, uid)
-              );
-            }
-            if (userData.sentMessages) {
-              allSent.push(
-                ...processMessages("sent", userData.sentMessages, uid)
-              );
-            }
-          });
-
-          setMessages({ received: allReceived, sent: allSent });
-          setLoading(false);
-        },
-        { onlyOnce: true }
-      );
-    } else {
-      const userPath = `users/${userId}`;
-      const receivedRef = ref(database, `${userPath}/receivedMessages`);
-      const sentRef = ref(database, `${userPath}/sentMessages`);
-
-      Promise.all([
-        get(receivedRef).then((snapshot) =>
-          processMessages("received", snapshot.val(), userId)
-        ),
-        get(sentRef).then((snapshot) =>
-          processMessages("sent", snapshot.val(), userId)
-        ),
-      ])
-        .then(([received, sent]) => {
-          setMessages({ received, sent });
-          setLoading(false);
-        })
-        .catch((error) => {
-          console.error("Error fetching messages:", error);
-          setLoading(false);
-        });
+  const applyFilters = () => {
+    let filtered = [...allMessages];
+    if (timeFilter !== "all") {
+      const today = new Date();
+      const filters = {
+        today: (m) =>
+          new Date(m.dateSent).toDateString() === today.toDateString(),
+        week: (m) =>
+          new Date(m.dateSent) >=
+          new Date(today.setDate(today.getDate() - today.getDay())),
+        month: (m) =>
+          new Date(m.dateSent) >=
+          new Date(today.getFullYear(), today.getMonth(), 1),
+      };
+      filtered = filtered.filter(filters[timeFilter]);
     }
+    if (userFilter !== "all") {
+      filtered = filtered.filter((m) => m.userName === userFilter);
+    }
+    if (messageDirection !== "all") {
+      filtered = filtered.filter((m) => m.messageType === messageDirection);
+    }
+    setFilteredMessages(filtered);
   };
 
-  const formatTimestamp = (ts) => {
-    if (!ts) return "Unknown";
-    return new Date(ts).toLocaleString();
-  };
+  const formatTimestamp = (timestamp) => new Date(timestamp).toLocaleString();
+  const formatDateForInput = (timestamp) =>
+    new Date(timestamp).toISOString().split("T")[0];
 
-  const handleFileDownload = async (fileUrl, filename) => {
+  const handleUpdate = async (message) => {
+    if (!editMessage || !isAdmin) return;
     try {
-      if (!fileUrl) return;
+      const path = `users/${message.userId}/${
+        message.messageType === "received" ? "receivedMessages" : "sentMessages"
+      }/${message.id}`;
+      const messageRef = ref(database, path);
+      let updatedData = { ...editMessage };
 
-      const fileReference = storageRef(storage, fileUrl);
-      const url = await getDownloadURL(fileReference);
+      if (newFile) {
+        try {
+          // Create a user-specific storage path with proper permissions
+          const fileExtension = newFile.name.split(".").pop().toLowerCase();
+          const fileName = `${Date.now()}_${message.id}.${fileExtension}`;
+          const filePath = `messageFiles/${message.userId}/${fileName}`;
+          const storageReference = storageRef(storage, filePath);
 
-      if (window.confirm("Would you like to download this file?")) {
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename || "download";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+          await uploadBytes(storageReference, newFile);
+          const downloadURL = await getDownloadURL(storageReference);
+
+          updatedData.fileUrl = downloadURL;
+          updatedData.fileFormat =
+            fileExtension.toUpperCase() === "DOCX"
+              ? "MS Word"
+              : fileExtension.toUpperCase() === "DOC"
+              ? "MS Word"
+              : fileExtension.toUpperCase() === "JPG"
+              ? "JPEG"
+              : fileExtension.toUpperCase();
+          updatedData.hasAttachment = true;
+        } catch (uploadError) {
+          console.error("Upload error:", uploadError);
+          setError(`File upload failed: ${uploadError.message}`);
+          return; // Exit early if file upload fails
+        }
       }
-    } catch (error) {
-      console.error("Download failed:", error);
-      alert("Failed to download file. Please try again.");
+
+      await set(messageRef, updatedData);
+      setEditMessage(null);
+      setNewFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = null;
+      setError(null); // Clear any previous errors
+      fetchAllMessages();
+    } catch (err) {
+      console.error("Error updating message:", err);
+      setError(`Failed to update message: ${err.message}`);
     }
   };
 
-  const handleAction = (action) => {
-    const { message, data } = modalState;
-    const path = `users/${message.uid}/${activeTab}Messages/${message.id}`;
+  const handleDelete = async (message) => {
+    if (!isAdmin) return;
 
-    if (action === "delete") {
-      if (isAdmin || (user && user.uid === message.uid)) {
-        remove(ref(database, path))
-          .then(() => {
-            closeModal();
-          })
-          .catch((error) => {
-            console.error("Delete failed:", error);
-            alert("Failed to delete message. Please try again.");
-          });
-      } else {
-        alert("You don't have permission to delete this message.");
-        closeModal();
-      }
-    }
-
-    if (action === "edit") {
-      if (!isAdmin && user && user.uid !== message.uid) {
-        alert("You don't have permission to edit this message.");
-        closeModal();
+    try {
+      // Confirm deletion
+      if (!window.confirm("Are you sure you want to delete this message?")) {
         return;
       }
 
-      const { id, uid, createdAt, timestamp, ...updateData } = data;
-      const changes = {};
-      Object.entries(updateData).forEach(([key, value]) => {
-        if (message[key] !== value) {
-          changes[key] = value;
-        }
-      });
+      // Create reference to the message
+      const path = `users/${message.userId}/${
+        message.messageType === "received" ? "receivedMessages" : "sentMessages"
+      }/${message.id}`;
+      const messageRef = ref(database, path);
 
-      if (Object.keys(changes).length > 0) {
-        update(ref(database, path), changes)
-          .then(() => {
-            closeModal();
-          })
-          .catch((error) => {
-            console.error("Update failed:", error);
-            alert("Failed to update message. Please try again.");
-          });
-      } else {
-        closeModal();
-      }
+      // Delete the message
+      await remove(messageRef);
+
+      // Show success notification
+      setError(null); // Clear any error messages
+      alert("Message deleted successfully");
+      fetchAllMessages();
+    } catch (err) {
+      console.error("Error deleting message:", err);
+      setError(`Failed to delete message: ${err.message}`);
     }
   };
 
-  const openModal = (type, message) => {
-    setModalState({
-      isOpen: true,
-      type,
-      message,
-      data: { ...message },
-    });
+  const handleDownload = (message) => {
+    if (message.fileUrl) {
+      window.open(message.fileUrl, "_blank");
+    }
   };
 
-  const closeModal = () => {
-    setModalState({ isOpen: false, type: null, message: null, data: {} });
-  };
-
-  const handleInputChange = (key, value) => {
-    setModalState((prev) => ({
-      ...prev,
-      data: { ...prev.data, [key]: value },
-    }));
-  };
-
-  const MessageRow = ({ message }) => (
-    <tr key={`${message.uid}-${message.id}`} className="hover:bg-gray-50">
-      <td className="px-4 py-2 text-indigo-700">
-        {message[activeTab === "received" ? "sender" : "receiver"] || "Unknown"}
-      </td>
-      <td className="px-4 py-2">
-        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-          {message.type || "N/A"}
-        </span>
-      </td>
-      <td className="px-4 py-2 truncate max-w-xs">{message.description}</td>
-      <td className="px-4 py-2">
-        {message.fileUrl ? (
-          <img
-            src={message.fileUrl}
-            alt={message.filename || "File"}
-            className="w-16 h-16 object-cover rounded cursor-pointer"
-            onClick={() =>
-              handleFileDownload(message.fileUrl, message.filename)
-            }
-          />
-        ) : (
-          "No File"
-        )}
-      </td>
-      <td className="px-4 py-2">
-        {formatTimestamp(message.createdAt || message.timestamp)}
-      </td>
-      {isAdmin && <td className="px-4 py-2">{message.uid}</td>}
-      <td className="px-4 py-2 text-right space-x-2">
-        <button
-          onClick={() => openModal("view", message)}
-          className="text-indigo-600"
-        >
-          <Icon>{icons.eye}</Icon>
-        </button>
-        <button
-          onClick={() => openModal("edit", message)}
-          className="text-blue-600"
-        >
-          <Icon>{icons.edit}</Icon>
-        </button>
-        <button
-          onClick={() => openModal("delete", message)}
-          className="text-red-600"
-        >
-          <Icon>{icons.trash}</Icon>
-        </button>
-      </td>
-    </tr>
-  );
-
-  const renderModalContent = () => {
-    const { type, message, data } = modalState;
-
-    switch (type) {
-      case "view":
+  const renderContentField = () => {
+    switch (editMessage.type) {
+      case "STL":
+      case "Letter":
         return (
-          <>
-            <div className="space-y-2">
-              {Object.entries({
-                ID: message.id,
-                Channel: message.channel,
-                Sender: message.sender,
-                Receiver: message.receiver,
-                Type: message.type,
-                Description: message.description,
-                "File Format": message.fileFormat,
-                Time: formatTimestamp(message.createdAt || message.timestamp),
-                ...(isAdmin && { "User ID": message.uid }),
-              }).map(([key, value]) => (
-                <p key={key}>
-                  <strong>{key}:</strong> {value || "-"}
-                </p>
-              ))}
-              {message.fileUrl && (
-                <div>
-                  <strong>File:</strong>
-                  <img
-                    src={message.fileUrl}
-                    alt={message.filename || "File"}
-                    className="mt-2 max-w-full h-auto rounded-lg cursor-pointer"
-                    onClick={() =>
-                      handleFileDownload(message.fileUrl, message.filename)
-                    }
-                  />
-                  <p className="text-sm text-gray-500 mt-1">
-                    Click image to download
-                  </p>
-                </div>
-              )}
-            </div>
-            <button
-              className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-lg"
-              onClick={closeModal}
-            >
-              Close
-            </button>
-          </>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">
+              Subject <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={editMessage.description || ""}
+              onChange={(e) =>
+                setEditMessage({ ...editMessage, description: e.target.value })
+              }
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+              required
+            />
+          </div>
         );
-
-      case "edit":
+      case "Conference Notice":
         return (
-          <>
-            <div className="space-y-3">
-              {[
-                { key: "channel", placeholder: "Channel" },
-                { key: "sender", placeholder: "Sender" },
-                { key: "receiver", placeholder: "Receiver" },
-                { key: "type", placeholder: "Type" },
-                {
-                  key: "description",
-                  placeholder: "Description",
-                  textarea: true,
-                },
-                { key: "fileFormat", placeholder: "File Format" },
-                { key: "fileUrl", placeholder: "File URL" },
-              ].map((field) =>
-                field.textarea ? (
-                  <textarea
-                    key={field.key}
-                    className="w-full p-2 border rounded-lg min-h-[100px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={data[field.key] || ""}
-                    onChange={(e) =>
-                      handleInputChange(field.key, e.target.value)
-                    }
-                    placeholder={field.placeholder}
-                  />
-                ) : (
-                  <input
-                    key={field.key}
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={data[field.key] || ""}
-                    onChange={(e) =>
-                      handleInputChange(field.key, e.target.value)
-                    }
-                    placeholder={field.placeholder}
-                  />
-                )
-              )}
-            </div>
-            <div className="mt-4 flex justify-end space-x-2">
-              <button
-                className="px-4 py-2 bg-gray-200 rounded-lg"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
-                onClick={() => handleAction("edit")}
-              >
-                Save
-              </button>
-            </div>
-          </>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">
+              Agenda <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={editMessage.agenda || ""}
+              onChange={(e) =>
+                setEditMessage({ ...editMessage, agenda: e.target.value })
+              }
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+              required
+            />
+          </div>
         );
-
-      case "delete":
+      case "LOI":
         return (
-          <>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this message? This action cannot
-              be undone.
-            </p>
-            <div className="flex justify-center space-x-2">
-              <button
-                className="px-4 py-2 bg-gray-200 rounded-lg"
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-red-600 text-white rounded-lg"
-                onClick={() => handleAction("delete")}
-              >
-                Delete
-              </button>
-            </div>
-          </>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">
+              Title <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={editMessage.title || ""}
+              onChange={(e) =>
+                setEditMessage({ ...editMessage, title: e.target.value })
+              }
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+              required
+            />
+          </div>
         );
-
+      case "RAD":
+        return (
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">
+              Cite Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={editMessage.cite || ""}
+              onChange={(e) =>
+                setEditMessage({ ...editMessage, cite: e.target.value })
+              }
+              className="w-full p-2 border rounded-md bg-gray-200"
+              placeholder="Max 50 characters"
+              maxLength={50}
+              required
+            />
+          </div>
+        );
       default:
         return null;
     }
   };
 
+  const channelOptions = [
+    "Email",
+    "Viber",
+    "Hardcopy",
+    "Cignal",
+    "Telegram",
+    "SMS",
+    "Zimbra",
+  ];
+  const fileFormatOptions = ["PDF", "JPEG", "MS Word", "PNG"];
+
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="container mx-auto py-8 px-4 max-w-7xl">
+      <div className="container mx-auto py-12 px-4 max-w-7xl">
         <h1 className="text-3xl font-bold text-indigo-900 mb-6">
-          {isAdmin ? "Admin Actions Dashboard" : "Message Actions"}
+          Message Actions
         </h1>
 
-        {isAdmin && allUsers.length > 0 && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Select User
-            </label>
-            <select
-              value={selectedUser || "all"}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSelectedUser(value);
-                fetchMessages(value === "all" ? null : value);
-              }}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">All Users</option>
-              {allUsers.map((u) => (
-                <option key={u.uid} value={u.uid}>
-                  {u.name} ({u.email})
-                </option>
-              ))}
-            </select>
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+            {error}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="p-4 flex justify-between items-center border-b flex-wrap gap-2">
-            <div className="space-x-2">
-              <button
-                className={`px-3 py-1 rounded-lg ${
-                  activeTab === "received"
-                    ? "bg-indigo-100 text-indigo-800"
-                    : "text-gray-600"
-                }`}
-                onClick={() => setActiveTab("received")}
-              >
-                Received
-              </button>
-              <button
-                className={`px-3 py-1 rounded-lg ${
-                  activeTab === "sent"
-                    ? "bg-indigo-100 text-indigo-800"
-                    : "text-gray-600"
-                }`}
-                onClick={() => setActiveTab("sent")}
-              >
-                Sent
-              </button>
-            </div>
-            <input
-              type="text"
-              placeholder="Search messages..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="min-w-[200px] flex-grow-0 p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
+        <div className="mb-6 flex justify-between gap-4">
+          <select
+            className="p-2 border rounded-lg"
+            value={timeFilter}
+            onChange={(e) => setTimeFilter(e.target.value)}
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+
+          <div className="flex items-center space-x-2">
+            <span
+              className={
+                messageDirection === "sent" ? "text-blue-600" : "text-gray-500"
+              }
+            >
+              Outgoing
+            </span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={messageDirection === "received"}
+                onChange={() =>
+                  setMessageDirection(
+                    messageDirection === "received" ? "sent" : "received"
+                  )
+                }
+                className="sr-only peer"
+              />
+              <div className="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:left-0.5 after:top-0.5"></div>
+            </label>
+            <span
+              className={
+                messageDirection === "received"
+                  ? "text-blue-600"
+                  : "text-gray-500"
+              }
+            >
+              Incoming
+            </span>
           </div>
 
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="w-12 h-12 border-t-4 border-indigo-500 rounded-full animate-spin mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading messages...</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
+          <div className="relative">
+            <button
+              className="flex px-4 py-2 border rounded-lg"
+              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            >
+              Filter by User
+            </button>
+            {showFilterDropdown && (
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg z-10">
+                <button
+                  className={`w-full text-left p-2 ${
+                    userFilter === "all" ? "text-indigo-600" : "text-gray-700"
+                  }`}
+                  onClick={() => {
+                    setUserFilter("all");
+                    setShowFilterDropdown(false);
+                  }}
+                >
+                  All Users
+                </button>
+                {uniqueUsers.map((userName) => (
+                  <button
+                    key={userName}
+                    className={`w-full text-left p-2 ${
+                      userFilter === userName
+                        ? "text-indigo-600"
+                        : "text-gray-700"
+                    }`}
+                    onClick={() => {
+                      setUserFilter(userName);
+                      setShowFilterDropdown(false);
+                    }}
+                  >
+                    {userName}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-32">
+            <div className="h-16 w-16 rounded-full border-t-4 border-b-4 border-indigo-500 animate-spin"></div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            {filteredMessages.length === 0 ? (
+              <div className="text-center py-12">No messages available</div>
+            ) : (
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                      {activeTab === "received" ? "Sender" : "Receiver"}
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                      Type
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                      Description
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                      File
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                      Time
-                    </th>
-                    {isAdmin && (
-                      <th className="px-4 py-2 text-left text-xs text-gray-500 uppercase">
-                        User
-                      </th>
-                    )}
-                    <th className="px-4 py-2 text-right text-xs text-gray-500 uppercase">
-                      Actions
-                    </th>
+                    <th className="px-4 py-3">User</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Direction</th>
+                    <th className="px-4 py-3">From/To</th>
+                    <th className="px-4 py-3">Subject</th>
+                    <th className="px-4 py-3">Date Sent</th>
+                    <th className="px-4 py-3">Attachment</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMessages[activeTab].length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={isAdmin ? 7 : 6}
-                        className="p-8 text-center text-gray-500"
-                      >
-                        No {activeTab} messages found
-                        {searchTerm && " matching your search criteria"}
+                  {filteredMessages.map((message) => (
+                    <tr key={`${message.userId}-${message.id}`}>
+                      <td className="px-4 py-4">{message.userName}</td>
+                      <td className="px-4 py-4">{message.communicationType}</td>
+                      <td className="px-4 py-4">{message.messageType}</td>
+                      <td className="px-4 py-4">
+                        {message.messageType === "received"
+                          ? message.sender
+                          : message.receiver}
+                      </td>
+                      <td className="px-4 py-4">{message.subject}</td>
+                      <td className="px-4 py-4">
+                        {formatTimestamp(message.dateSent)}
+                      </td>
+                      <td className="px-4 py-4">
+                        {message.fileUrl ? (
+                          ["JPEG", "PNG"].includes(message.fileFormat) ? (
+                            <img
+                              src={message.fileUrl}
+                              alt="Attachment"
+                              className="w-16 h-16 object-cover"
+                            />
+                          ) : (
+                            <a
+                              href={message.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline"
+                            >
+                              View
+                            </a>
+                          )
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-4 py-4 flex gap-2">
+                        <button
+                          onClick={() => setViewMessage(message)}
+                          className="text-blue-600"
+                          title="View"
+                        >
+                          <FaEye />
+                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => setEditMessage(message)}
+                              className="text-yellow-600"
+                              title="Edit"
+                            >
+                              <FaEdit />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(message)}
+                              className="text-red-600"
+                              title="Delete"
+                            >
+                              <FaTrash />
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => handleDownload(message)}
+                          className="text-green-600"
+                          title="Download"
+                        >
+                          <FaDownload />
+                        </button>
                       </td>
                     </tr>
-                  ) : (
-                    filteredMessages[activeTab].map((message) => (
-                      <MessageRow
-                        key={`${message.uid}-${message.id}`}
-                        message={message}
-                      />
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
+            )}
+          </div>
+        )}
+
+        {/* View Modal */}
+        {viewMessage && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-8 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-indigo-900">
+                  Message Details
+                </h2>
+                <button
+                  onClick={() => setViewMessage(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-700 mb-2">
+                      Basic Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-sm text-gray-500">Type:</div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.communicationType}
+                      </div>
+
+                      <div className="text-sm text-gray-500">Direction:</div>
+                      <div className="text-sm font-medium capitalize">
+                        {viewMessage.messageType}
+                      </div>
+
+                      <div className="text-sm text-gray-500">Document ID:</div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.documentId || "-"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-700 mb-2">
+                      Communication Details
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-sm text-gray-500">
+                        {viewMessage.messageType === "received"
+                          ? "From:"
+                          : "To:"}
+                      </div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.messageType === "received"
+                          ? viewMessage.sender
+                          : viewMessage.receiver}
+                      </div>
+
+                      <div className="text-sm text-gray-500">Subject:</div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.subject}
+                      </div>
+
+                      <div className="text-sm text-gray-500">Channel:</div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.channel}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-700 mb-2">
+                      Timeline
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-sm text-gray-500">Date Sent:</div>
+                      <div className="text-sm font-medium">
+                        {formatTimestamp(viewMessage.dateSent)}
+                      </div>
+
+                      <div className="text-sm text-gray-500">
+                        Date Received:
+                      </div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.dateReceived
+                          ? formatTimestamp(viewMessage.dateReceived)
+                          : "-"}
+                      </div>
+
+                      <div className="text-sm text-gray-500">Received by:</div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.staffName || "-"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-700 mb-2">
+                      User Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="text-sm text-gray-500">User:</div>
+                      <div className="text-sm font-medium">
+                        {viewMessage.userName}
+                      </div>
+
+                      <div className="text-sm text-gray-500">User ID:</div>
+                      <div className="text-sm font-medium truncate">
+                        {viewMessage.userId}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attachment Section */}
+              <div className="mt-6 bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-gray-700 mb-2">Attachment</h3>
+                {viewMessage.fileUrl ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className="text-sm text-gray-500">
+                          File Format:{" "}
+                        </span>
+                        <span className="text-sm font-medium">
+                          {viewMessage.fileFormat}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDownload(viewMessage)}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded-md flex items-center text-sm"
+                      >
+                        <FaDownload className="mr-1" /> Download
+                      </button>
+                    </div>
+
+                    {["JPEG", "PNG"].includes(viewMessage.fileFormat) ? (
+                      <div className="border rounded-lg overflow-hidden mt-2">
+                        <img
+                          src={viewMessage.fileUrl}
+                          alt="Attachment"
+                          className="w-full object-contain max-h-64"
+                        />
+                      </div>
+                    ) : (
+                      <div className="border rounded-lg p-4 text-center mt-2">
+                        <a
+                          href={viewMessage.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline flex items-center justify-center"
+                        >
+                          <svg
+                            className="w-8 h-8 mr-2"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          View Document
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">
+                    No attachment available
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setViewMessage(null)}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition duration-200"
+                >
+                  Close
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="mt-6 bg-white rounded-xl shadow-md p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard
-            icon={icons.inbox}
-            label="Received"
-            value={messages.received.length}
-          />
-          <StatCard
-            icon={icons.send}
-            label="Sent"
-            value={messages.sent.length}
-          />
-          <StatCard
-            icon={icons.message}
-            label="Total"
-            value={messages.received.length + messages.sent.length}
-          />
-        </div>
-
-        <Modal
-          isOpen={modalState.isOpen}
-          onClose={closeModal}
-          title={
-            modalState.type === "view"
-              ? "Message Details"
-              : modalState.type === "edit"
-              ? "Edit Message"
-              : "Confirm Delete"
-          }
-        >
-          {renderModalContent()}
-        </Modal>
+        {/* Edit Modal */}
+        {editMessage && isAdmin && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div className="bg-white p-6 rounded-lg max-w-5xl w-full">
+              <h2 className="text-xl font-bold text-blue-800 mb-4">
+                Edit Record
+              </h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleUpdate(editMessage);
+                }}
+                className="space-y-3"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Type of Communication
+                    </label>
+                    <select
+                      value={editMessage.type}
+                      onChange={(e) =>
+                        setEditMessage({ ...editMessage, type: e.target.value })
+                      }
+                      className="w-full p-2 border rounded-md bg-gray-200"
+                    >
+                      <option value="STL">STL (Subject to letter)</option>
+                      <option value="Conference Notice">
+                        Conference Notice
+                      </option>
+                      <option value="LOI">LOI (Letter of Instructions)</option>
+                      <option value="RAD">RAD message</option>
+                      <option value="Letter">Letter (Civilian)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      ID
+                    </label>
+                    <input
+                      type="text"
+                      value={editMessage.id}
+                      readOnly
+                      className="w-full p-2 bg-gray-100 border rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Dated <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(editMessage.dateSent)}
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          dateSent: new Date(e.target.value).getTime(),
+                        })
+                      }
+                      className="w-full p-2 border rounded-md"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Sender/Originator <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editMessage.sender}
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          sender: e.target.value,
+                        })
+                      }
+                      className={`w-full p-2 border rounded-md ${
+                        editMessage.messageType === "sent"
+                          ? "bg-gray-100"
+                          : "bg-white"
+                      }`}
+                      readOnly={editMessage.messageType === "sent"}
+                      maxLength={25}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Receiver <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editMessage.receiver}
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          receiver: e.target.value,
+                        })
+                      }
+                      className={`w-full p-2 border rounded-md ${
+                        editMessage.messageType === "received"
+                          ? "bg-gray-100"
+                          : "bg-white"
+                      }`}
+                      readOnly={editMessage.messageType === "received"}
+                      required
+                    />
+                  </div>
+                </div>
+                {renderContentField()}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Date Received
+                    </label>
+                    <input
+                      type="date"
+                      value={
+                        editMessage.dateReceived
+                          ? formatDateForInput(editMessage.dateReceived)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          dateReceived: e.target.value
+                            ? new Date(e.target.value).getTime()
+                            : null,
+                        })
+                      }
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Received by
+                    </label>
+                    <input
+                      type="text"
+                      value={editMessage.staffName || ""}
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          staffName: e.target.value,
+                        })
+                      }
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Channel
+                    </label>
+                    <select
+                      value={editMessage.channel}
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          channel: e.target.value,
+                        })
+                      }
+                      className="w-full p-2 border rounded-md bg-gray-200"
+                    >
+                      {channelOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      File Format
+                    </label>
+                    <select
+                      value={editMessage.fileFormat}
+                      onChange={(e) =>
+                        setEditMessage({
+                          ...editMessage,
+                          fileFormat: e.target.value,
+                        })
+                      }
+                      className="w-full p-2 border rounded-md bg-gray-200"
+                    >
+                      {fileFormatOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Attachment
+                    </label>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={(e) => setNewFile(e.target.files[0])}
+                      className="w-full p-2 border rounded-md"
+                      accept={
+                        editMessage.fileFormat === "PDF"
+                          ? ".pdf"
+                          : editMessage.fileFormat === "JPEG"
+                          ? ".jpg,.jpeg"
+                          : editMessage.fileFormat === "MS Word"
+                          ? ".doc,.docx"
+                          : editMessage.fileFormat === "PNG"
+                          ? ".png"
+                          : ""
+                      }
+                    />
+                    {editMessage.fileUrl && (
+                      <a
+                        href={editMessage.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600"
+                      >
+                        Current File
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4 justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-green-600 text-white rounded"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditMessage(null);
+                      setNewFile(null);
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default ActionsPage;
+export default ActionPage;

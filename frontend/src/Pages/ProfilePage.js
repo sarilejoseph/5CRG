@@ -33,6 +33,7 @@ const ProfilePage = () => {
 
   const [file, setFile] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -92,16 +93,30 @@ const ProfilePage = () => {
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    setFile(selectedFile);
 
-    // Create a preview of the selected image
     if (selectedFile) {
+      // Validate file type
+      if (!selectedFile.type.match("image.*")) {
+        showNotification("Please select an image file", "error");
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        showNotification("File size should be less than 5MB", "error");
+        return;
+      }
+
+      setFile(selectedFile);
+
+      // Create a preview of the selected image
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewImage(reader.result);
       };
       reader.readAsDataURL(selectedFile);
     } else {
+      setFile(null);
       setPreviewImage(null);
     }
   };
@@ -124,6 +139,7 @@ const ProfilePage = () => {
     if (!file) return formData.profilePicture;
 
     try {
+      setUploadLoading(true);
       // Create a reference to 'profilePictures/[uid]'
       const profilePicRef = storageRef(storage, `profilePictures/${uid}`);
 
@@ -132,8 +148,10 @@ const ProfilePage = () => {
 
       // Get the download URL
       const downloadURL = await getDownloadURL(profilePicRef);
+      setUploadLoading(false);
       return downloadURL;
     } catch (error) {
+      setUploadLoading(false);
       showNotification(
         `Profile picture upload failed: ${error.message}`,
         "error"
@@ -147,7 +165,11 @@ const ProfilePage = () => {
     setLoading(true);
 
     try {
-      let profilePictureURL = await uploadProfilePicture(user.uid);
+      let profilePictureURL = formData.profilePicture;
+
+      if (file) {
+        profilePictureURL = await uploadProfilePicture(user.uid);
+      }
 
       if (formData.newPassword) {
         if (formData.newPassword !== formData.confirmPassword) {
@@ -155,6 +177,16 @@ const ProfilePage = () => {
           setLoading(false);
           return;
         }
+
+        if (!formData.currentPassword) {
+          showNotification(
+            "Current password is required to set a new password",
+            "error"
+          );
+          setLoading(false);
+          return;
+        }
+
         await updatePassword(user, formData.newPassword);
       }
 
@@ -180,6 +212,57 @@ const ProfilePage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderProfilePicture = () => {
+    const imgSrc =
+      previewImage || formData.profilePicture || "/defaultProfilePic.png";
+
+    return (
+      <div className="flex flex-col items-center">
+        <div className="relative w-32 h-32 mb-4">
+          {uploadLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+            </div>
+          )}
+          <img
+            src={imgSrc}
+            alt="Profile"
+            className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md"
+          />
+          {editMode && (
+            <div className="absolute bottom-0 right-0">
+              <label
+                htmlFor="profile-upload"
+                className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full cursor-pointer shadow-md"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </label>
+              <input
+                id="profile-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+          )}
+        </div>
+        {editMode && file && (
+          <div className="text-sm text-gray-500 mt-1 mb-3">
+            {file.name} ({(file.size / 1024).toFixed(1)} KB)
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -211,23 +294,7 @@ const ProfilePage = () => {
           <div className="flex flex-col md:flex-row">
             <div className="w-full md:w-1/3 flex flex-col items-center mb-6 md:mb-0">
               <div className="text-center">
-                <img
-                  src={
-                    previewImage ||
-                    formData.profilePicture ||
-                    "/defaultProfilePic.png"
-                  }
-                  alt="Profile"
-                  className="w-24 h-24 rounded-full mb-4 object-cover"
-                />
-                {editMode && (
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="mt-2 w-full"
-                  />
-                )}
+                {renderProfilePicture()}
                 <h2 className="text-2xl font-bold text-gray-800">
                   {formData.name}
                 </h2>
@@ -384,8 +451,9 @@ const ProfilePage = () => {
                       <button
                         type="submit"
                         className="bg-blue-600 text-white py-2 px-6 rounded-md hover:bg-blue-700 mr-4"
+                        disabled={loading}
                       >
-                        Save Changes
+                        {loading ? "Saving..." : "Save Changes"}
                       </button>
                     </div>
                   </>

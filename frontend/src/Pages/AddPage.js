@@ -58,7 +58,7 @@ const RecordForm = () => {
           receiver: messageType === "received" ? userIdentifier : "",
           staffName: userIdentifier,
         }));
-        generateNextId(currentUser.uid); // Call only if user exists
+        generateNextId(currentUser.uid);
       } else {
         setUser(null);
         setFormData((prev) => ({
@@ -135,7 +135,6 @@ const RecordForm = () => {
 
       const newIdNum = highestId + 1;
       const newId = `O${String(newIdNum).padStart(5, "0")}`;
-
       setFormData((prev) => ({ ...prev, id: newId }));
     } catch (error) {
       console.error("Error generating ID:", error);
@@ -266,6 +265,7 @@ const RecordForm = () => {
           JPEG: ["jpg", "jpeg"],
           "MS Word": ["doc", "docx"],
           PNG: ["png"],
+          Excel: ["xls", "xlsx"],
         }[formData.fileFormat];
 
         if (!validExtensions.includes(fileExtension)) {
@@ -396,7 +396,7 @@ const RecordForm = () => {
     "Zimbra",
   ];
 
-  const fileFormatOptions = ["PDF", "JPEG", "MS Word", "PNG"];
+  const fileFormatOptions = ["PDF", "JPEG", "MS Word", "PNG", "Excel"];
 
   return (
     <div className="min-h-screen flex bg-gray-100 flex-col relative">
@@ -647,6 +647,8 @@ const RecordForm = () => {
                     ? ".doc,.docx"
                     : formData.fileFormat === "PNG"
                     ? ".png"
+                    : formData.fileFormat === "Excel"
+                    ? ".xls,.xlsx"
                     : ""
                 }
               />

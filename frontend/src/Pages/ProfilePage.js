@@ -95,13 +95,11 @@ const ProfilePage = () => {
     const selectedFile = e.target.files[0];
 
     if (selectedFile) {
-      // Validate file type
       if (!selectedFile.type.match("image.*")) {
         showNotification("Please select an image file", "error");
         return;
       }
 
-      // Validate file size (max 5MB)
       if (selectedFile.size > 5 * 1024 * 1024) {
         showNotification("File size should be less than 5MB", "error");
         return;
@@ -109,7 +107,6 @@ const ProfilePage = () => {
 
       setFile(selectedFile);
 
-      // Create a preview of the selected image
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewImage(reader.result);
@@ -140,18 +137,28 @@ const ProfilePage = () => {
 
     try {
       setUploadLoading(true);
-      // Create a reference to 'profilePictures/[uid]'
+
+      if (!auth.currentUser) {
+        throw new Error("User not authenticated");
+      }
+
       const profilePicRef = storageRef(storage, `profilePictures/${uid}`);
 
-      // Upload the file
-      await uploadBytes(profilePicRef, file);
+      const metadata = {
+        contentType: file.type,
+        customMetadata: {
+          uploadedBy: uid,
+        },
+      };
 
-      // Get the download URL
+      await uploadBytes(profilePicRef, file, metadata);
       const downloadURL = await getDownloadURL(profilePicRef);
+
       setUploadLoading(false);
       return downloadURL;
     } catch (error) {
       setUploadLoading(false);
+      console.error("Upload error:", error);
       showNotification(
         `Profile picture upload failed: ${error.message}`,
         "error"
@@ -165,10 +172,20 @@ const ProfilePage = () => {
     setLoading(true);
 
     try {
+      if (!user) {
+        throw new Error("No authenticated user found");
+      }
+
       let profilePictureURL = formData.profilePicture;
 
       if (file) {
         profilePictureURL = await uploadProfilePicture(user.uid);
+        if (
+          !profilePictureURL ||
+          profilePictureURL === formData.profilePicture
+        ) {
+          throw new Error("Failed to upload profile picture");
+        }
       }
 
       if (formData.newPassword) {
@@ -200,7 +217,7 @@ const ProfilePage = () => {
         department: formData.department,
         phoneNumber: formData.phoneNumber,
         bio: formData.bio,
-        profilePicture: profilePictureURL, // Save the profile picture URL
+        profilePicture: profilePictureURL,
         updatedAt: new Date().toISOString(),
       });
 
@@ -208,6 +225,7 @@ const ProfilePage = () => {
       setEditMode(false);
       fetchUserProfile(user.uid);
     } catch (error) {
+      console.error("Submit error:", error);
       showNotification(`Failed to update profile: ${error.message}`, "error");
     } finally {
       setLoading(false);
@@ -282,7 +300,7 @@ const ProfilePage = () => {
           className={`mb-4 p-4 rounded-md ${
             notification.type === "success"
               ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-700"
+              : "bg-red-100 text-red--.700"
           }`}
         >
           {notification.message}
@@ -451,9 +469,11 @@ const ProfilePage = () => {
                       <button
                         type="submit"
                         className="bg-blue-600 text-white py-2 px-6 rounded-md hover:bg-blue-700 mr-4"
-                        disabled={loading}
+                        disabled={loading || uploadLoading}
                       >
-                        {loading ? "Saving..." : "Save Changes"}
+                        {loading || uploadLoading
+                          ? "Saving..."
+                          : "Save Changes"}
                       </button>
                     </div>
                   </>

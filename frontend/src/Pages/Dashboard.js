@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { getDatabase, ref, onValue } from "firebase/database";
+import { getDatabase, ref, onValue, get } from "firebase/database";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "../firebase";
+import {
+  LineChart,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Line,
+  ResponsiveContainer,
+} from "recharts";
 
 const database = getDatabase(app);
 const auth = getAuth(app);
@@ -16,6 +25,10 @@ const SideBySideMessageTables = () => {
   const [topReceivers, setTopReceivers] = useState([]);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [userName, setUserName] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [messageActivityData, setMessageActivityData] = useState([]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentDateTime(new Date()), 1000);
@@ -26,6 +39,7 @@ const SideBySideMessageTables = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
+        checkAdminStatus(user.uid);
 
         // First try to use displayName if available
         if (user.displayName) {
@@ -45,13 +59,16 @@ const SideBySideMessageTables = () => {
         }
 
         fetchMessages(user.uid);
+        fetchOnlineUsers();
       } else {
         setUser(null);
         setUserName("");
+        setIsAdmin(false);
         setReceivedMessages([]);
         setSentMessages([]);
         setTopSenders([]);
         setTopReceivers([]);
+        setOnlineUsers([]);
         setLoading(false);
       }
     });
@@ -59,8 +76,42 @@ const SideBySideMessageTables = () => {
   }, []);
 
   useEffect(() => {
-    if (user) fetchMessages(user.uid);
-  }, [timeframe, user]);
+    if (user) {
+      fetchMessages(selectedUser ? selectedUser.uid : user.uid);
+      generateActivityData();
+    }
+  }, [timeframe, user, selectedUser]);
+
+  const checkAdminStatus = (uid) => {
+    const adminRef = ref(database, `users/${uid}/role`);
+    onValue(adminRef, (snapshot) => {
+      const role = snapshot.val();
+      setIsAdmin(role === "admin");
+    });
+  };
+
+  const fetchOnlineUsers = () => {
+    const onlineStatusRef = ref(database, "users");
+    onValue(onlineStatusRef, (snapshot) => {
+      const usersData = snapshot.val();
+      if (usersData) {
+        const usersArray = Object.entries(usersData).map(([uid, userData]) => ({
+          uid,
+          name:
+            userData.profile?.name ||
+            userData.email?.split("@")[0] ||
+            "Unknown User",
+          email: userData.email || "",
+          online: userData.online || false,
+          lastSeen: userData.lastSeen || null,
+          role: userData.role || "user",
+        }));
+        setOnlineUsers(usersArray);
+      } else {
+        setOnlineUsers([]);
+      }
+    });
+  };
 
   const getTimeframeDate = () => {
     const today = new Date();
@@ -71,6 +122,58 @@ const SideBySideMessageTables = () => {
     else if (timeframe === "monthly") startDate.setMonth(today.getMonth() - 1);
 
     return startDate;
+  };
+
+  const generateActivityData = () => {
+    const startDate = getTimeframeDate();
+    const endDate = new Date();
+
+    // Create data points based on timeframe
+    let dataPoints = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toLocaleDateString();
+      const receivedCount = countMessagesOnDate(receivedMessages, currentDate);
+      const sentCount = countMessagesOnDate(sentMessages, currentDate);
+
+      dataPoints.push({
+        date: dateStr,
+        received: receivedCount,
+        sent: sentCount,
+      });
+
+      // Increment based on timeframe
+      if (timeframe === "daily") {
+        // For daily view, use hourly increments
+        currentDate.setHours(currentDate.getHours() + 2);
+      } else {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
+
+    setMessageActivityData(dataPoints);
+  };
+
+  const countMessagesOnDate = (messages, date) => {
+    // Count messages that fall within the same date or hour depending on timeframe
+    return messages.filter((message) => {
+      const messageDate = new Date(message.timestamp);
+      if (timeframe === "daily") {
+        return (
+          messageDate.getDate() === date.getDate() &&
+          messageDate.getMonth() === date.getMonth() &&
+          messageDate.getFullYear() === date.getFullYear() &&
+          messageDate.getHours() === date.getHours()
+        );
+      } else {
+        return (
+          messageDate.getDate() === date.getDate() &&
+          messageDate.getMonth() === date.getMonth() &&
+          messageDate.getFullYear() === date.getFullYear()
+        );
+      }
+    }).length;
   };
 
   const fetchMessages = (userId) => {
@@ -161,6 +264,7 @@ const SideBySideMessageTables = () => {
               setTopReceivers([]);
             }
 
+            generateActivityData();
             setLoading(false);
           },
           (error) => {
@@ -194,10 +298,96 @@ const SideBySideMessageTables = () => {
     return date.toLocaleDateString(undefined, options);
   };
 
+  const handleUserSelect = (selectedUser) => {
+    setSelectedUser(selectedUser);
+  };
+
+  const OnlineUsersCard = () => (
+    <div className="bg-white rounded-lg shadow border border-gray-100 h-full">
+      <div className="p-4 border-b border-gray-200">
+        <h2 className="text-xl font-bold text-gray-800">Online Users</h2>
+      </div>
+      <div className="p-2 overflow-y-auto max-h-96">
+        {onlineUsers.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No users available
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {onlineUsers.map((onlineUser) => (
+              <li
+                key={onlineUser.uid}
+                className={`p-3 hover:bg-gray-50 cursor-pointer transition-colors ${
+                  selectedUser?.uid === onlineUser.uid ? "bg-indigo-50" : ""
+                }`}
+                onClick={() => (isAdmin ? handleUserSelect(onlineUser) : null)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className={`w-3 h-3 rounded-full ${
+                        onlineUser.online ? "bg-green-500" : "bg-gray-300"
+                      }`}
+                    ></div>
+                    <span className="font-medium text-gray-800">
+                      {onlineUser.name}
+                      {onlineUser.role === "admin" && (
+                        <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
+                          Admin
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      className="text-xs px-2 py-1 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUserSelect(onlineUser);
+                      }}
+                    >
+                      View
+                    </button>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {onlineUser.online
+                    ? "Currently online"
+                    : onlineUser.lastSeen
+                    ? `Last seen: ${new Date(
+                        onlineUser.lastSeen
+                      ).toLocaleString()}`
+                    : "Last seen: Unknown"}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {isAdmin && selectedUser && (
+        <div className="p-3 border-t border-gray-100 bg-gray-50">
+          <button
+            className="w-full py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded transition-colors text-sm font-medium"
+            onClick={() => setSelectedUser(null)}
+          >
+            Back to My Data
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   const MessageAnalytics = () => (
     <div className="mb-6">
       <div className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-gray-200 bg-white rounded-t-lg shadow">
-        <h2 className="text-2xl font-bold text-gray-800">Analytics</h2>
+        <div className="flex items-center">
+          <h2 className="text-2xl font-bold text-gray-800">Analytics</h2>
+          {isAdmin && selectedUser && (
+            <span className="ml-3 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">
+              Viewing: {selectedUser.name}
+            </span>
+          )}
+        </div>
         <div className="flex space-x-2 mt-2 md:mt-0">
           <button
             className={`px-4 py-2 rounded-md font-medium transition-all ${
@@ -232,76 +422,110 @@ const SideBySideMessageTables = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-white rounded-b-lg shadow">
-        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 shadow-sm">
-          <h3 className="text-sm uppercase font-semibold text-indigo-700 mb-1">
-            Incoming
-          </h3>
-          <p className="text-3xl font-bold text-indigo-800">
-            {receivedMessages.length}
-          </p>
-        </div>
-        <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 shadow-sm">
-          <h3 className="text-sm uppercase font-semibold text-emerald-700 mb-1">
-            Outgoing
-          </h3>
-          <p className="text-3xl font-bold text-emerald-800">
-            {sentMessages.length}
-          </p>
+      <div className="bg-white p-4 rounded-b-lg shadow">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 shadow-sm">
+            <h3 className="text-sm uppercase font-semibold text-indigo-700 mb-1">
+              Incoming
+            </h3>
+            <p className="text-3xl font-bold text-indigo-800">
+              {receivedMessages.length}
+            </p>
+          </div>
+          <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 shadow-sm">
+            <h3 className="text-sm uppercase font-semibold text-emerald-700 mb-1">
+              Outgoing
+            </h3>
+            <p className="text-3xl font-bold text-emerald-800">
+              {sentMessages.length}
+            </p>
+          </div>
+
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
+            <h3 className="text-xs uppercase font-semibold text-gray-500 mb-2">
+              Top Senders
+            </h3>
+            {topSenders.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-2">
+                No data available
+              </p>
+            ) : (
+              <div className="flex flex-col space-y-1">
+                {topSenders.slice(0, 3).map((sender, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between text-sm py-1"
+                  >
+                    <span className="font-medium text-gray-700 truncate max-w-[70%]">
+                      {sender.name}
+                    </span>
+                    <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">
+                      {sender.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
+            <h3 className="text-xs uppercase font-semibold text-gray-500 mb-2">
+              Top Receivers
+            </h3>
+            {topReceivers.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-2">
+                No data available
+              </p>
+            ) : (
+              <div className="flex flex-col space-y-1">
+                {topReceivers.slice(0, 3).map((receiver, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between text-sm py-1"
+                  >
+                    <span className="font-medium text-gray-700 truncate max-w-[70%]">
+                      {receiver.name}
+                    </span>
+                    <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">
+                      {receiver.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-          <h3 className="text-xs uppercase font-semibold text-gray-500 mb-2">
-            Top Senders
+        <div className="border rounded-lg border-gray-200 p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">
+            Message Activity
           </h3>
-          {topSenders.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-2">
-              No data available
-            </p>
-          ) : (
-            <div className="flex flex-col space-y-1">
-              {topSenders.slice(0, 3).map((sender, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between text-sm py-1"
-                >
-                  <span className="font-medium text-gray-700 truncate max-w-[70%]">
-                    {sender.name}
-                  </span>
-                  <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">
-                    {sender.count}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-          <h3 className="text-xs uppercase font-semibold text-gray-500 mb-2">
-            Top Receivers
-          </h3>
-          {topReceivers.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-2">
-              No data available
-            </p>
-          ) : (
-            <div className="flex flex-col space-y-1">
-              {topReceivers.slice(0, 3).map((receiver, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between text-sm py-1"
-                >
-                  <span className="font-medium text-gray-700 truncate max-w-[70%]">
-                    {receiver.name}
-                  </span>
-                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">
-                    {receiver.count}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={messageActivityData}>
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="received"
+                  stroke="#6366F1"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  name="Received"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="sent"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  name="Sent"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
     </div>
@@ -449,6 +673,11 @@ const SideBySideMessageTables = () => {
         <div>
           <h1 className="text-3xl font-bold text-indigo-800">
             Welcome back, {userName}!
+            {isAdmin && (
+              <span className="ml-2 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                Admin
+              </span>
+            )}
           </h1>
           <p className="text-gray-600 mt-1">
             Record your communications with us.
@@ -467,14 +696,19 @@ const SideBySideMessageTables = () => {
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-6 mb-6">
-            <div className="w-full">
+          <div className="flex flex-col md:flex-row gap-6 mb-6">
+            <div className="w-full md:w-3/4">
               <MessageAnalytics />
+            </div>
+            <div className="w-full md:w-1/4">
+              <OnlineUsersCard />
             </div>
           </div>
           <div className="space-y-6">
             <ReceivedMessagesTable
-              title={`Messages Received (${
+              title={`Messages Received ${
+                isAdmin && selectedUser ? `(${selectedUser.name})` : ""
+              } (${
                 timeframe === "daily"
                   ? "Today"
                   : timeframe === "weekly"
@@ -484,7 +718,9 @@ const SideBySideMessageTables = () => {
               messages={receivedMessages}
             />
             <SentMessagesTable
-              title={`Messages Sent (${
+              title={`Messages Sent ${
+                isAdmin && selectedUser ? `(${selectedUser.name})` : ""
+              } (${
                 timeframe === "daily"
                   ? "Today"
                   : timeframe === "weekly"

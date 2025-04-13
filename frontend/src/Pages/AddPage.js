@@ -3,11 +3,9 @@ import {
   getDatabase,
   ref,
   push,
-  get,
   serverTimestamp,
-  query,
-  orderByChild,
-  limitToLast,
+  get,
+  runTransaction,
 } from "firebase/database";
 import {
   getStorage,
@@ -58,7 +56,7 @@ const RecordForm = () => {
           receiver: messageType === "received" ? userIdentifier : "",
           staffName: userIdentifier,
         }));
-        generateNextId(currentUser.uid);
+        generateNextId(currentUser.uid, userIdentifier);
       } else {
         setUser(null);
         setFormData((prev) => ({
@@ -103,43 +101,42 @@ const RecordForm = () => {
     setFormData(newFormData);
   }, [formData.type]);
 
-  const generateNextId = async (userId) => {
+  const generateNextId = async (userId, userIdentifier) => {
     try {
-      const paths = [
-        `users/${userId}/sentMessages`,
-        `users/${userId}/receivedMessages`,
-      ];
-
-      let highestId = 0;
-      for (const path of paths) {
-        const messagesRef = ref(database, path);
-        const lastMessageQuery = query(
-          messagesRef,
-          orderByChild("id"),
-          limitToLast(1)
-        );
-        const snapshot = await get(lastMessageQuery);
-
-        if (snapshot.exists()) {
-          snapshot.forEach((child) => {
-            const id = child.val().id;
-            if (id && id.startsWith("O")) {
-              const num = parseInt(id.slice(1), 10);
-              if (!isNaN(num) && num > highestId) {
-                highestId = num;
-              }
-            }
-          });
+      // Extract first two letters from displayName or email
+      let prefix = "XX"; // Default prefix
+      if (userIdentifier) {
+        const name = userIdentifier.split("@")[0]; // Remove email domain if using email
+        const words = name.trim().split(/\s+/);
+        if (words[0]) {
+          // Use first letter of first word and first letter of second word (if available)
+          const firstLetter = words[0][0]?.toUpperCase() || "X";
+          const secondLetter = (
+            words[1]?.[0] ||
+            words[0][1] ||
+            "X"
+          ).toUpperCase();
+          prefix = `${firstLetter}${secondLetter}`;
         }
       }
 
-      const newIdNum = highestId + 1;
-      const newId = `O${String(newIdNum).padStart(5, "0")}`;
+      // Reference to the user's lastMessageId counter
+      const counterRef = ref(database, `users/${userId}/lastMessageId`);
+
+      // Atomically increment the counter
+      let newIdNum;
+      await runTransaction(counterRef, (currentValue) => {
+        newIdNum = (currentValue || 0) + 1;
+        return newIdNum;
+      });
+
+      // Format the ID as XXNNNN (e.g., JS0001)
+      const newId = `${prefix}${String(newIdNum).padStart(4, "0")}`;
       setFormData((prev) => ({ ...prev, id: newId }));
     } catch (error) {
       console.error("Error generating ID:", error);
       setError("Failed to generate ID. Using temporary ID.");
-      const tempId = `O${String(Date.now()).slice(-6)}`;
+      const tempId = `XX${String(Date.now()).slice(-4)}`;
       setFormData((prev) => ({ ...prev, id: tempId }));
     }
   };
@@ -177,7 +174,7 @@ const RecordForm = () => {
     setFile(null);
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = null;
-    if (user) generateNextId(user.uid);
+    if (user) generateNextId(user.uid, userIdentifier);
   };
 
   const handleSubmit = async (e) => {
@@ -399,307 +396,314 @@ const RecordForm = () => {
   const fileFormatOptions = ["PDF", "JPEG", "MS Word", "PNG", "Excel"];
 
   return (
-    <div className="min-h-screen flex bg-gray-100 flex-col relative">
-      <div className="w-full max-w-5xl mx-auto p-4 bg-white border mt-5 rounded-lg shadow">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-bold text-blue-800">Add Record</h1>
-          <div className="flex items-center space-x-2">
-            <span
-              className={
-                messageType === "sent" ? "text-blue-600" : "text-gray-500"
-              }
-            >
-              Out
-            </span>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={messageType === "received"}
-                onChange={() =>
-                  setMessageType(messageType === "sent" ? "received" : "sent")
+    <div className="min-h-screen flex bg-gray-100 flex-col relative pt-10">
+      <div className="w-full max-w-5xl mx-auto px-4">
+        <h1 className="text-3xl font-bold text-blue-800 mb-4 ml-1">
+          Add Record
+        </h1>
+        <div className="bg-white border rounded-lg shadow p-4 mt-2">
+          {error && (
+            <div className="mb-3 p-2 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-3 p-2 bg-green-100 text-green-700 rounded-md">
+              Saved!
+            </div>
+          )}
+
+          <div className="flex justify-end items-center mb-4">
+            <div className="flex items-center space-x-2">
+              <span
+                className={
+                  messageType === "sent" ? "text-blue-600" : "text-gray-500"
                 }
-                className="sr-only peer"
-              />
-              <div className="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:left-0.5 after:top-0.5"></div>
-            </label>
-            <span
-              className={
-                messageType === "received" ? "text-blue-600" : "text-gray-500"
-              }
-            >
-              In
-            </span>
+              >
+                Out
+              </span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={messageType === "received"}
+                  onChange={() =>
+                    setMessageType(messageType === "sent" ? "received" : "sent")
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:left-0.5 after:top-0.5"></div>
+              </label>
+              <span
+                className={
+                  messageType === "received" ? "text-blue-600" : "text-gray-500"
+                }
+              >
+                In
+              </span>
+            </div>
           </div>
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label
+                  htmlFor="type"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Type of Communication
+                </label>
+                <select
+                  id="type"
+                  name="type"
+                  value={formData.type}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded-md bg-gray-200"
+                >
+                  <option value="STL">STL (Subject to letter)</option>
+                  <option value="Conference Notice">Conference Notice</option>
+                  <option value="LOI">LOI (Letter of Instructions)</option>
+                  <option value="RAD">RAD message</option>
+                  <option value="Letter">Letter (Civilian)</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="id"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="id"
+                  name="id"
+                  type="text"
+                  value={formData.id}
+                  readOnly
+                  className="w-full p-2 bg-gray-100 border rounded-md"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="timestamp"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Dated <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="timestamp"
+                  name="timestamp"
+                  type="date"
+                  value={formData.timestamp}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded-md"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="sender"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Sender/Originator <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="sender"
+                  name="sender"
+                  type="text"
+                  value={formData.sender}
+                  onChange={handleChange}
+                  className={`w-full p-2 border rounded-md ${
+                    messageType === "sent" ? "bg-gray-100" : "bg-white"
+                  }`}
+                  readOnly={messageType === "sent"}
+                  maxLength={25}
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="receiver"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Receiver <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="receiver"
+                  name="receiver"
+                  type="text"
+                  value={formData.receiver}
+                  onChange={handleChange}
+                  className={`w-full p-2 border rounded-md ${
+                    messageType === "received" ? "bg-gray-100" : "bg-white"
+                  }`}
+                  readOnly={messageType === "received"}
+                  required
+                />
+              </div>
+            </div>
+
+            {renderContentField()}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label
+                  htmlFor="dateReceived"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Date received
+                </label>
+                <input
+                  id="dateReceived"
+                  name="dateReceived"
+                  type="date"
+                  className="w-full p-2 border rounded-md"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="staffName"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Received by
+                </label>
+                <input
+                  id="staffName"
+                  name="staffName"
+                  type="text"
+                  value={formData.staffName}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded-md"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="channel"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Channel
+                </label>
+                <select
+                  id="channel"
+                  name="channel"
+                  value={formData.channel}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded-md bg-gray-200"
+                >
+                  {channelOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="fileFormat"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  File Format
+                </label>
+                <select
+                  id="fileFormat"
+                  name="fileFormat"
+                  value={formData.fileFormat}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded-md bg-gray-200"
+                >
+                  {fileFormatOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="file"
+                  className="block text-sm text-gray-700 mb-1"
+                >
+                  Attachment
+                </label>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="w-full p-2 border rounded-md"
+                  accept={
+                    formData.fileFormat === "PDF"
+                      ? ".pdf"
+                      : formData.fileFormat === "JPEG"
+                      ? ".jpg,.jpeg"
+                      : formData.fileFormat === "MS Word"
+                      ? ".doc,.docx"
+                      : formData.fileFormat === "PNG"
+                      ? ".png"
+                      : formData.fileFormat === "Excel"
+                      ? ".xls,.xlsx"
+                      : ""
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={resetForm}
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={`px-3 py-1 ${
+                  loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+                } text-white rounded-md flex items-center`}
+              >
+                {loading ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-3 w-3 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  `Save ${messageType === "sent" ? "Outgoing" : "Incoming"}`
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-
-        {error && (
-          <div className="mb-3 p-2 bg-red-100 text-red-700 rounded-md">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="mb-3 p-2 bg-green-100 text-green-700 rounded-md">
-            Saved!
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label
-                htmlFor="type"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Type of Communication
-              </label>
-              <select
-                id="type"
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md bg-gray-200"
-              >
-                <option value="STL">STL (Subject to letter)</option>
-                <option value="Conference Notice">Conference Notice</option>
-                <option value="LOI">LOI (Letter of Instructions)</option>
-                <option value="RAD">RAD message</option>
-                <option value="Letter">Letter (Civilian)</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="id" className="block text-sm text-gray-700 mb-1">
-                ID <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="id"
-                name="id"
-                type="text"
-                value={formData.id}
-                readOnly
-                className="w-full p-2 bg-gray-100 border rounded-md"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="timestamp"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Dated <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="timestamp"
-                name="timestamp"
-                type="date"
-                value={formData.timestamp}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="sender"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Sender/Originator <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="sender"
-                name="sender"
-                type="text"
-                value={formData.sender}
-                onChange={handleChange}
-                className={`w-full p-2 border rounded-md ${
-                  messageType === "sent" ? "bg-gray-100" : "bg-white"
-                }`}
-                readOnly={messageType === "sent"}
-                maxLength={25}
-                required
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="receiver"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Receiver <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="receiver"
-                name="receiver"
-                type="text"
-                value={formData.receiver}
-                onChange={handleChange}
-                className={`w-full p-2 border rounded-md ${
-                  messageType === "received" ? "bg-gray-100" : "bg-white"
-                }`}
-                readOnly={messageType === "received"}
-                required
-              />
-            </div>
-          </div>
-
-          {renderContentField()}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label
-                htmlFor="dateReceived"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Date received
-              </label>
-              <input
-                id="dateReceived"
-                name="dateReceived"
-                type="date"
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="staffName"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Received by
-              </label>
-              <input
-                id="staffName"
-                name="staffName"
-                type="text"
-                value={formData.staffName}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="channel"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Channel
-              </label>
-              <select
-                id="channel"
-                name="channel"
-                value={formData.channel}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md bg-gray-200"
-              >
-                {channelOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="fileFormat"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                File Format
-              </label>
-              <select
-                id="fileFormat"
-                name="fileFormat"
-                value={formData.fileFormat}
-                onChange={handleChange}
-                className="w-full p-2 border rounded-md bg-gray-200"
-              >
-                {fileFormatOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="file"
-                className="block text-sm text-gray-700 mb-1"
-              >
-                Attachment
-              </label>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                className="w-full p-2 border rounded-md"
-                accept={
-                  formData.fileFormat === "PDF"
-                    ? ".pdf"
-                    : formData.fileFormat === "JPEG"
-                    ? ".jpg,.jpeg"
-                    : formData.fileFormat === "MS Word"
-                    ? ".doc,.docx"
-                    : formData.fileFormat === "PNG"
-                    ? ".png"
-                    : formData.fileFormat === "Excel"
-                    ? ".xls,.xlsx"
-                    : ""
-                }
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={resetForm}
-              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className={`px-3 py-1 ${
-                loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-              } text-white rounded-md flex items-center`}
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-3 w-3 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                `Save ${messageType === "sent" ? "Outgoing" : "Incoming"}`
-              )}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );

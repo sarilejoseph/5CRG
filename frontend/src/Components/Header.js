@@ -70,8 +70,18 @@ const Header = ({ setMainContentMargin }) => {
 
   const handleLogout = () => {
     signOut(auth)
-      .then(() => console.log("User signed out"))
-      .catch((error) => console.error("Error signing out:", error));
+      .then(() => {
+        console.log("User signed out");
+        // Redirect to landing page and reload the app
+        window.location.href = "/";
+        window.location.reload();
+      })
+      .catch((error) => {
+        console.error("Error signing out:", error);
+        // Still attempt redirect and reload on error
+        window.location.href = "/";
+        window.location.reload();
+      });
     closeUserDropdown();
   };
 
@@ -215,7 +225,7 @@ const Header = ({ setMainContentMargin }) => {
                 )}
                 <span className="mr-1">{userName}</span>
                 <svg
-                  className={`w-4 h-4 ml-1 transition-transform duration-300 ${
+                  className={`w-4 h W-4 ml-1 transition-transform duration-300 ${
                     isUserDropdownOpen ? "rotate-180" : ""
                   }`}
                   fill="none"

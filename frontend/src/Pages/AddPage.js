@@ -39,6 +39,7 @@ const RecordForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [idGenerated, setIdGenerated] = useState(false);
   const fileInputRef = useRef(null);
   const database = getDatabase(app);
   const storage = getStorage(app);
@@ -56,12 +57,15 @@ const RecordForm = () => {
           receiver: messageType === "received" ? userIdentifier : "",
           staffName: userIdentifier,
         }));
-        generateNextId(currentUser.uid, userIdentifier);
+        // Only generate ID on initial load and when not already generated
+        if (!idGenerated && !formData.id) {
+          generateNextId(currentUser.uid, userIdentifier);
+          setIdGenerated(true);
+        }
       } else {
         setUser(null);
         setFormData((prev) => ({
           ...prev,
-          id: "",
           sender: "",
           receiver: "",
           staffName: "",
@@ -70,6 +74,18 @@ const RecordForm = () => {
     });
     return () => unsubscribe();
   }, [messageType]);
+
+  // Update sender/receiver when message type changes
+  useEffect(() => {
+    if (user) {
+      const userIdentifier = user.displayName || user.email || "";
+      setFormData((prev) => ({
+        ...prev,
+        sender: messageType === "sent" ? userIdentifier : prev.sender,
+        receiver: messageType === "received" ? userIdentifier : prev.receiver,
+      }));
+    }
+  }, [messageType, user]);
 
   useEffect(() => {
     const type = formData.type;
@@ -103,13 +119,11 @@ const RecordForm = () => {
 
   const generateNextId = async (userId, userIdentifier) => {
     try {
-      // Extract first two letters from displayName or email
-      let prefix = "XX"; // Default prefix
+      let prefix = "XX";
       if (userIdentifier) {
-        const name = userIdentifier.split("@")[0]; // Remove email domain if using email
+        const name = userIdentifier.split("@")[0];
         const words = name.trim().split(/\s+/);
         if (words[0]) {
-          // Use first letter of first word and first letter of second word (if available)
           const firstLetter = words[0][0]?.toUpperCase() || "X";
           const secondLetter = (
             words[1]?.[0] ||
@@ -120,19 +134,22 @@ const RecordForm = () => {
         }
       }
 
-      // Reference to the user's lastMessageId counter
+      // First check if there's an existing ID counter
       const counterRef = ref(database, `users/${userId}/lastMessageId`);
+      const snapshot = await get(counterRef);
 
-      // Atomically increment the counter
-      let newIdNum;
-      await runTransaction(counterRef, (currentValue) => {
-        newIdNum = (currentValue || 0) + 1;
-        return newIdNum;
-      });
-
-      // Format the ID as XXNNNN (e.g., JS0001)
-      const newId = `${prefix}${String(newIdNum).padStart(4, "0")}`;
-      setFormData((prev) => ({ ...prev, id: newId }));
+      // Only increment if we're actually creating a new record
+      if (!snapshot.exists()) {
+        // If no counter exists yet, initialize it to 1
+        await runTransaction(counterRef, () => 1);
+        const newId = `${prefix}0001`;
+        setFormData((prev) => ({ ...prev, id: newId }));
+      } else {
+        // If counter exists, just read it (don't increment)
+        const currentValue = snapshot.val();
+        const newId = `${prefix}${String(currentValue).padStart(4, "0")}`;
+        setFormData((prev) => ({ ...prev, id: newId }));
+      }
     } catch (error) {
       console.error("Error generating ID:", error);
       setError("Failed to generate ID. Using temporary ID.");
@@ -174,7 +191,13 @@ const RecordForm = () => {
     setFile(null);
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = null;
-    if (user) generateNextId(user.uid, userIdentifier);
+
+    // Reset ID generation state and generate a new ID
+    setIdGenerated(false);
+    if (user) {
+      generateNextId(user.uid, userIdentifier);
+      setIdGenerated(true);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -284,6 +307,12 @@ const RecordForm = () => {
       }
 
       await push(dbRef, recordData);
+
+      // Now increment counter for next ID
+      const counterRef = ref(database, `users/${user.uid}/lastMessageId`);
+      await runTransaction(counterRef, (currentValue) => {
+        return (currentValue || 0) + 1;
+      });
 
       setSuccess(true);
       resetForm();

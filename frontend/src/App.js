@@ -1,4 +1,3 @@
-// App.js (unchanged from previous)
 import { useState, useEffect } from "react";
 import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
@@ -14,6 +13,7 @@ import Actions from "./Pages/ActionsPage";
 import AdminUserManagement from "./Pages/AdminPage";
 import Profile from "./Pages/ProfilePage";
 import Help from "./Pages/HelpPage";
+import Logs from "./Pages/ActivityLogsPage";
 import { auth } from "./firebase";
 
 function App() {
@@ -113,6 +113,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Actions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/logs"
+            element={
+              <ProtectedRoute>
+                <Logs />
               </ProtectedRoute>
             }
           />

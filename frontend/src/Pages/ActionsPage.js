@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getDatabase, ref, onValue, remove, update } from "firebase/database";
+import {
+  getDatabase,
+  ref,
+  onValue,
+  remove,
+  update,
+  push,
+} from "firebase/database";
 import {
   getStorage,
   ref as storageRef,
@@ -174,6 +181,24 @@ function ActionsPage() {
     }
   };
 
+  const logActivity = (action, description) => {
+    if (!user) return;
+
+    const logRef = ref(database, `users/${user.uid}/activityLogs`);
+    const logData = {
+      action,
+      description,
+      timestamp: new Date().toISOString(),
+      username: usernames[user.uid] || "Unknown",
+      userId: user.uid,
+    };
+
+    push(logRef, logData).catch((error) => {
+      console.error("Error logging activity:", error);
+      setErrorMessage("Failed to log activity. Please try again.");
+    });
+  };
+
   const handleDelete = (message) => {
     if (
       !user ||
@@ -191,6 +216,7 @@ function ActionsPage() {
 
     remove(messageRef)
       .then(() => {
+        logActivity("Delete", `Deleted message with ID: ${message.id}`);
         alert("Message deleted successfully!");
       })
       .catch((error) => {
@@ -204,6 +230,7 @@ function ActionsPage() {
       alert("No file available for download");
       return;
     }
+    logActivity("View", `Viewed file for message with ID: ${message.id}`);
     try {
       window.open(message.fileUrl, "_blank");
     } catch (error) {
@@ -213,6 +240,7 @@ function ActionsPage() {
   };
 
   const handleEdit = (message) => {
+    logActivity("View", `Viewed message with ID: ${message.id}`);
     setEditingMessage({ ...message });
     setFile(null);
     setErrorMessage("");
@@ -283,6 +311,7 @@ function ActionsPage() {
 
     update(messageRef, updates)
       .then(() => {
+        logActivity("Edit", `Edited message with ID: ${editingMessage.id}`);
         alert("Message updated successfully!");
         setEditingMessage(null);
         setFile(null);

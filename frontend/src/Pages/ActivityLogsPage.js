@@ -74,10 +74,17 @@ function ActivityLogsPage() {
             Object.entries(usersData).forEach(([userId, userData]) => {
               const userLogs = userData.activityLogs || {};
               Object.entries(userLogs).forEach(([key, value]) => {
+                // Create a unique log ID that combines user ID and log key
+                const logId = `${userId.substring(0, 6)}-${key.substring(
+                  0,
+                  8
+                )}`;
+
                 allLogs.push({
                   key,
                   userId,
                   username: userData.name || "Unknown",
+                  logId,
                   ...value,
                 });
               });
@@ -110,12 +117,21 @@ function ActivityLogsPage() {
             const data = snapshot.val();
             if (data) {
               const logsArray = Object.entries(data)
-                .map(([key, value]) => ({
-                  key,
-                  userId: user.uid,
-                  username: usernames[user.uid] || "Unknown",
-                  ...value,
-                }))
+                .map(([key, value]) => {
+                  // Create a unique log ID that combines user ID and log key
+                  const logId = `${user.uid.substring(0, 6)}-${key.substring(
+                    0,
+                    8
+                  )}`;
+
+                  return {
+                    key,
+                    userId: user.uid,
+                    username: usernames[user.uid] || "Unknown",
+                    logId,
+                    ...value,
+                  };
+                })
                 .sort((a, b) => {
                   const timestampA = a.timestamp || 0;
                   const timestampB = b.timestamp || 0;
@@ -149,7 +165,7 @@ function ActivityLogsPage() {
   const filteredLogs = logs.filter((log) => {
     const searchableContent = `${log.action || ""} ${log.description || ""} ${
       log.userId || ""
-    } ${log.username || ""}`.toLowerCase();
+    } ${log.username || ""} ${log.logId || ""}`.toLowerCase();
     const matchesSearch = searchableContent.includes(searchTerm.toLowerCase());
     const matchesUsername = selectedUsername
       ? log.username === selectedUsername
@@ -198,7 +214,11 @@ function ActivityLogsPage() {
         <main className="max-w-7xl mx-auto">
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="p-4 border-b border-gray-200 flex items-center space-x-4">
-              <div className="flex-1"></div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-500">
+                  Search by log ID, action, or description
+                </p>
+              </div>
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <input
@@ -256,6 +276,9 @@ function ActivityLogsPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Log ID
+                    </th>
                     {isAdmin && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Username
@@ -284,6 +307,9 @@ function ActivityLogsPage() {
                         key={`${log.userId}-${log.key}`}
                         className="hover:bg-gray-50"
                       >
+                        <td className="px-6 py-4 text-sm font-mono text-gray-500">
+                          {log.logId}
+                        </td>
                         {isAdmin && (
                           <td className="px-6 py-4 text-sm text-gray-500">
                             {log.username}
@@ -308,7 +334,7 @@ function ActivityLogsPage() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={isAdmin ? 5 : 3}
+                        colSpan={isAdmin ? 6 : 4}
                         className="px-6 py-4 text-center text-sm text-gray-500"
                       >
                         No logs found

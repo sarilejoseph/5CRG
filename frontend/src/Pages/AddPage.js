@@ -111,6 +111,9 @@ const RecordForm = () => {
       case "Letter":
         newFormData.fileFormat = "PDF";
         break;
+      case "Other":
+        newFormData.fileFormat = "PDF";
+        break;
       default:
         newFormData.fileFormat = "PDF";
     }
@@ -226,6 +229,9 @@ const RecordForm = () => {
       case "RAD":
         requiredFields.push("cite");
         break;
+      case "Other":
+        requiredFields.push("customTypeValue");
+        break;
     }
 
     if (requiredFields.some((field) => !formData[field])) {
@@ -241,8 +247,12 @@ const RecordForm = () => {
         id: formData.id,
         sender: formData.sender,
         receiver: formData.receiver,
-        type: formData.type,
-        channel: formData.channel,
+        type:
+          formData.type === "Other" ? formData.customTypeValue : formData.type,
+        channel:
+          formData.channel === "Other"
+            ? formData.customChannelValue
+            : formData.channel,
         timestamp: formData.timestamp
           ? new Date(formData.timestamp).getTime()
           : Date.now(),
@@ -268,6 +278,9 @@ const RecordForm = () => {
           break;
         case "RAD":
           recordData.cite = formData.cite;
+          break;
+        case "Other":
+          recordData.description = formData.description; // Optional for Other
           break;
       }
 
@@ -407,6 +420,26 @@ const RecordForm = () => {
             />
           </div>
         );
+      case "Other":
+        return (
+          <div>
+            <label
+              htmlFor="description"
+              className="block text-sm text-gray-700 mb-1"
+            >
+              Description
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              className="w-full h-20 p-2 border rounded-md resize-none bg-gray-200"
+              placeholder="Max 100 characters"
+              maxLength={100}
+            ></textarea>
+          </div>
+        );
       default:
         return null;
     }
@@ -420,6 +453,16 @@ const RecordForm = () => {
     "Telegram",
     "SMS",
     "Zimbra",
+    "Other",
+  ];
+
+  const typeOptions = [
+    "STL",
+    "Conference Notice",
+    "LOI",
+    "RAD",
+    "Letter",
+    "Other",
   ];
 
   const fileFormatOptions = ["PDF", "JPEG", "MS Word", "PNG", "Excel"];
@@ -488,12 +531,41 @@ const RecordForm = () => {
                   onChange={handleChange}
                   className="w-full p-2 border rounded-md bg-gray-200"
                 >
-                  <option value="STL">STL (Subject to letter)</option>
-                  <option value="Conference Notice">Conference Notice</option>
-                  <option value="LOI">LOI (Letter of Instructions)</option>
-                  <option value="RAD">RAD message</option>
-                  <option value="Letter">Letter (Civilian)</option>
+                  {typeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "STL"
+                        ? "STL (Subject to letter)"
+                        : option === "LOI"
+                        ? "LOI (Letter of Instructions)"
+                        : option === "RAD"
+                        ? "RAD message"
+                        : option === "Letter"
+                        ? "Letter (Civilian)"
+                        : option}
+                    </option>
+                  ))}
                 </select>
+                {formData.type === "Other" && (
+                  <div className="mt-2">
+                    <label
+                      htmlFor="customTypeValue"
+                      className="block text-sm text-gray-700 mb-1"
+                    >
+                      Specify Type <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="customTypeValue"
+                      name="customTypeValue"
+                      type="text"
+                      value={formData.customTypeValue}
+                      onChange={handleChange}
+                      className="w-full p-2 border rounded-md bg-gray-200"
+                      placeholder="Enter custom type"
+                      maxLength={50}
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -632,6 +704,27 @@ const RecordForm = () => {
                     </option>
                   ))}
                 </select>
+                {formData.channel === "Other" && (
+                  <div className="mt-2">
+                    <label
+                      htmlFor="customChannelValue"
+                      className="block text-sm text-gray-700 mb-1"
+                    >
+                      Specify Channel <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="customChannelValue"
+                      name="customChannelValue"
+                      type="text"
+                      value={formData.customChannelValue}
+                      onChange={handleChange}
+                      className="w-full p-2 border rounded-md bg-gray-200"
+                      placeholder="Enter custom channel"
+                      maxLength={50}
+                      required
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

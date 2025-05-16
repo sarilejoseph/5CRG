@@ -23,7 +23,7 @@ const Header = ({ setMainContentMargin }) => {
           const userRef = ref(database, `users/${user.uid}`);
           const snapshot = await get(userRef);
           if (snapshot.exists()) {
-            const userData = snapshot.val();
+            const userData = (userData = snapshot.val());
             setUserName(userData.name || user.email.split("@")[0]);
             setProfilePicture(userData.profilePicture || null);
           } else {
@@ -162,7 +162,7 @@ const Header = ({ setMainContentMargin }) => {
 
   return (
     <div className="relative">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-800 to-blue-900 border-b border-gray-700 px-4 lg:px-6 py-3 shadow-md">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-800 to-blue-900 border-b border-gray-700 px-4 sm:px-6 py-3 shadow-md">
         <nav className="flex justify-between items-center mx-auto max-w-screen-xl">
           <div className="flex items-center">
             <button
@@ -170,7 +170,7 @@ const Header = ({ setMainContentMargin }) => {
               onClick={toggleSidebar}
             >
               <div className="flex items-center px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                <span className="text-xl font-semibold text-white mr-2">
+                <span className="text-lg sm:text-xl font-semibold text-white mr-2">
                   5CRG
                 </span>
                 <svg
@@ -195,13 +195,13 @@ const Header = ({ setMainContentMargin }) => {
             <div className="relative" ref={userDropdownRef}>
               <button
                 onClick={toggleUserDropdown}
-                className="flex items-center py-2 px-4 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 focus:outline-none border border-transparent hover:border-blue-500"
+                className="flex items-center py-2 px-3 sm:px-4 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 focus:outline-none border border-transparent hover:border-blue-500"
               >
                 {profilePicture ? (
                   <img
                     src={profilePicture}
                     alt="Profile"
-                    className="w-10 h-10 rounded-full mr-2 object-cover"
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full mr-2 object-cover"
                     onError={() => setProfilePicture(null)}
                   />
                 ) : (
@@ -220,7 +220,7 @@ const Header = ({ setMainContentMargin }) => {
                     />
                   </svg>
                 )}
-                <span className="mr-1">{userName}</span>
+                <span className="mr-1 text-sm sm:text-base">{userName}</span>
                 <svg
                   className={`w-4 h-4 ml-1 transition-transform duration-300 ${
                     isUserDropdownOpen ? "rotate-180" : ""
@@ -230,6 +230,7 @@ const Header = ({ setMainContentMargin }) => {
                   viewBox="0 0 24 24"
                   xmlns="http://www.w3.org/2000/svg"
                 >
+                  seminal
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -312,7 +313,7 @@ const Header = ({ setMainContentMargin }) => {
         }}
       >
         <div
-          className={`flex items-center justify-between px-6 pt-8 pb-6 transition-all duration-300`}
+          className={`flex items-center justify-between px-4 sm:px-6 pt-6 sm:pt-8 pb-4 sm:pb-6 transition-all duration-300`}
           style={{
             background: isSidebarOpen
               ? "linear-gradient(to right, #0a192f, #112240)"
@@ -323,7 +324,7 @@ const Header = ({ setMainContentMargin }) => {
           {isSidebarOpen && (
             <div className="flex items-center">
               <img src={logo} alt="logo" className="h-8 w-auto" />
-              <span className="text-xl font-semibold text-white ml-3">
+              <span className="text-lg sm:text-xl font-semibold text-white ml-3">
                 5th CRG
               </span>
             </div>
@@ -332,16 +333,16 @@ const Header = ({ setMainContentMargin }) => {
 
         <div
           className={`${
-            isSidebarOpen ? "px-4 pt-8 pb-6" : "px-0 py-4"
-          } transition-all duration-300`}
+            isSidebarOpen ? "px-4 sm:px-4 pt-6 sm:pt-8 pb-6" : "px-0 py-4"
+          } transition-all duration-300 overflow-y-auto h-[calc(100%-120px)]`}
         >
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             {isSidebarOpen && (
               <h3 className="text-xs uppercase font-bold text-blue-300 mb-4 tracking-wider">
                 Main Actions
               </h3>
             )}
-            <ul className="space-y-4">
+            <ul className="space-y-3 sm:space-y-4">
               <li>
                 <Link
                   to="/add"
@@ -361,7 +362,7 @@ const Header = ({ setMainContentMargin }) => {
                     {renderIcon("add")}
                   </div>
                   {isSidebarOpen && (
-                    <span className="ml-3 whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
+                    <span className="ml-3 text-sm sm:text-base whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
                       Add Entry
                     </span>
                   )}
@@ -387,7 +388,7 @@ const Header = ({ setMainContentMargin }) => {
                       {renderIcon(item.icon)}
                     </div>
                     {isSidebarOpen && (
-                      <span className="ml-3 whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
+                      <span className="ml-3 text-sm sm:text-base whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
                         {item.label}
                       </span>
                     )}
@@ -397,13 +398,13 @@ const Header = ({ setMainContentMargin }) => {
             </ul>
           </div>
 
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             {isSidebarOpen && (
               <h3 className="text-xs uppercase font-bold text-blue-400 mb-4 tracking-wider">
                 Reporting
               </h3>
             )}
-            <ul className="space-y-4">
+            <ul className="space-y-3 sm:space-y-4">
               {navigationItems.reporting.map((item, index) => (
                 <li key={index}>
                   <Link
@@ -424,7 +425,7 @@ const Header = ({ setMainContentMargin }) => {
                       {renderIcon(item.icon)}
                     </div>
                     {isSidebarOpen && (
-                      <span className="ml-3 whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
+                      <span className="ml-3 text-sm sm:text-base whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
                         {item.label}
                       </span>
                     )}
@@ -434,13 +435,13 @@ const Header = ({ setMainContentMargin }) => {
             </ul>
           </div>
 
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             {isSidebarOpen && (
               <h3 className="text-xs uppercase font-bold text-blue-400 mb-4 tracking-wider">
                 Administration
               </h3>
             )}
-            <ul className="space-y-4">
+            <ul className="space-y-3 sm:space-y-4">
               {navigationItems.administration.map((item, index) => (
                 <li key={index}>
                   <Link
@@ -461,7 +462,7 @@ const Header = ({ setMainContentMargin }) => {
                       {renderIcon(item.icon)}
                     </div>
                     {isSidebarOpen && (
-                      <span className="ml-3 whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
+                      <span className="ml-3 text-sm sm:text-base whitespace-nowrap group-hover:translate-x-1 transition-transform duration-200">
                         {item.label}
                       </span>
                     )}
@@ -470,16 +471,16 @@ const Header = ({ setMainContentMargin }) => {
               ))}
             </ul>
           </div>
-
-          {isSidebarOpen && (
-            <div className="absolute bottom-0 left-0 right-0 px-4 py-6 text-xs text-gray-400 border-t border-gray-700">
-              <div className="flex justify-between items-center">
-                <span>5th CRG Portal</span>
-                <span>v1.0.0</span>
-              </div>
-            </div>
-          )}
         </div>
+
+        {isSidebarOpen && (
+          <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-6 py-4 sm:py-6 text-gray-400 border-t border-gray-700">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-2 text-xs sm:text-sm">
+              <span>5th CRG Portal</span>
+              <span>v1.0.0</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {isSidebarOpen && (

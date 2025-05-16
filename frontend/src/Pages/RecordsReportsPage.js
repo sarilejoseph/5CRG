@@ -425,74 +425,71 @@ const MessageHistoryPage = () => {
               font-family: 'Inter', sans-serif;
               color: #1e293b;
               line-height: 1.6;
-              margin: 30px;
+              margin: 20px;
+              font-size: 14px;
             }
             .official-header {
               text-align: center;
-              margin-bottom: 30px;
+              margin-bottom: 20px;
               border-bottom: 1px solid #e2e8f0;
-              padding-bottom: 15px;
+              padding-bottom: 10px;
               position: relative;
             }
             .vision-text {
-              color:rgb(171, 172, 173);
-              font-size: 14px;
-              margin-bottom: 5px;
+              color: rgb(171, 172, 173);
+              font-size: 12px;
+              margin-bottom: 4px;
             }
             .main-title {
-              font-size: 22px;
+              font-size: 20px;
               font-weight: 700;
-              color:rgb(0, 0, 0);
-              margin: 10px 0;
-              letter-spacing: 1px;
+              color: rgb(0, 0, 0);
+              margin: 8px 0;
+              letter-spacing: 0.5px;
             }
             .subtitle {
-              font-size: 18px;
+              font-size: 16px;
               font-weight: 600;
-              color:rgb(0, 0, 0);
-              margin: 5px 0;
+              color: rgb(0, 0, 0);
+              margin: 4px 0;
             }
             .address-text {
-              font-size: 14px;
-              color: #6c757d;
-              margin: 5px 0;
-            }
-            .contact-text {
               font-size: 12px;
               color: #6c757d;
+              margin: 4px 0;
             }
-            .logo-left {
+            .contact-text {
+              font-size: 10px;
+              color: #6c757d;
+            }
+            .logo-left, .logo-right {
               position: absolute;
-              left: 0;
-              top: 20px;
-              width: 60px;
-              height: 60px;
+              top: 10px;
+              width: 50px;
+              height: 50px;
             }
-            .logo-right {
-              position: absolute;
-              right: 0;
-              top: 20px;
-              width: 60px;
-              height: 60px;
-            }
+            .logo-left { left: 0; }
+            .logo-right { right: 0; }
             table { 
               width: 100%; 
               border-collapse: collapse;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+              border-radius: 6px;
               overflow: hidden;
+              margin-bottom: 20px;
             }
             th, td { 
               border: none;
-              padding: 12px 16px;
+              padding: 8px 12px;
               text-align: left;
+              font-size: 12px;
             }
             th { 
               background-color: #3b82f6;
               color: white;
               font-weight: 600;
               text-transform: uppercase;
-              font-size: 12px;
+              font-size: 10px;
               letter-spacing: 0.5px;
             }
             td {
@@ -505,35 +502,50 @@ const MessageHistoryPage = () => {
               border-bottom: none;
             }
             .content-header { 
-              margin-bottom: 20px;
+              margin-bottom: 15px;
             }
             h1 { 
               color: #1e40af;
               font-weight: 700;
-              margin-bottom: 10px;
+              margin-bottom: 8px;
+              font-size: 18px;
             }
             p {
               color: #64748b;
-              font-size: 14px;
+              font-size: 12px;
             }
             .footer {
-              margin-top: 30px;
-              padding-top: 15px;
+              margin-top: 20px;
+              padding-top: 10px;
               border-top: 1px solid #e2e8f0;
               text-align: center;
-              font-size: 12px;
+              font-size: 10px;
               color: #6c757d;
             }
-            /* Fixed image sizing in tables */
             img {
-              max-width: 100px;
-              max-height: 100px;
+              max-width: 80px;
+              max-height: 80px;
               object-fit: contain;
               display: block;
             }
-            /* Ensure attachment cell has fixed width */
             td:last-child {
-              width: 120px;
+              width: 100px;
+            }
+            @media print {
+              body { margin: 10mm; font-size: 12px; }
+              .logo-left, .logo-right { width: 40px; height: 40px; }
+              table { page-break-inside: auto; }
+              tr { page-break-inside: avoid; page-break-after: auto; }
+              th, td { padding: 6px 10px; }
+              img { max-width: 60px; max-height: 60px; }
+            }
+            @media screen and (max-width: 600px) {
+              body { margin: 10px; font-size: 12px; }
+              th, td { padding: 6px 8px; font-size: 10px; }
+              .logo-left, .logo-right { width: 40px; height: 40px; }
+              h1 { font-size: 16px; }
+              .main-title { font-size: 18px; }
+              .subtitle { font-size: 14px; }
             }
           </style>
         </head>
@@ -576,6 +588,7 @@ const MessageHistoryPage = () => {
     }, 500);
     setShowPrintDropdown(false);
   };
+
   const toggleViewMode = (mode) => {
     setViewMode(mode);
     if (mode === "all" && isAdmin) {
@@ -587,41 +600,41 @@ const MessageHistoryPage = () => {
 
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="container mx-auto py-12 px-4 max-w-7xl">
-        <h1 className="text-3xl font-bold text-indigo-900 mb-2">
+      <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 max-w-full">
+        <h1 className="text-2xl sm:text-3xl font-bold text-indigo-900 mb-4">
           Records & Reports
         </h1>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg text-sm sm:text-base">
             {error}
           </div>
         )}
 
         {isAdmin && (
-          <div className="mb-8 bg-white rounded-xl shadow-lg p-6">
-            <div className="flex flex-col md:flex-row gap-6">
+          <div className="mb-6 bg-white rounded-xl shadow-lg p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
               <div>
                 <p className="text-sm text-gray-600 font-medium mb-2">
                   View Mode
                 </p>
-                <div className="inline-flex rounded-lg">
+                <div className="inline-flex rounded-lg overflow-hidden">
                   <button
-                    className={`px-5 py-2.5 ${
+                    className={`px-4 py-2 text-sm sm:text-base ${
                       viewMode === "individual"
                         ? "bg-indigo-600 text-white"
-                        : "bg-white"
-                    } rounded-l-lg`}
+                        : "bg-white text-gray-700"
+                    } rounded-l-lg border border-gray-300`}
                     onClick={() => toggleViewMode("individual")}
                   >
                     Individual
                   </button>
                   <button
-                    className={`px-5 py-2.5 ${
+                    className={`px-4 py-2 text-sm sm:text-base ${
                       viewMode === "all"
                         ? "bg-indigo-600 text-white"
-                        : "bg-white"
-                    } rounded-r-lg`}
+                        : "bg-white text-gray-700"
+                    } rounded-r-lg border border-gray-300`}
                     onClick={() => toggleViewMode("all")}
                   >
                     All Users
@@ -635,7 +648,7 @@ const MessageHistoryPage = () => {
                     setSelectedUser(e.target.value);
                     fetchMessages(e.target.value);
                   }}
-                  className="w-full p-2 border rounded-lg"
+                  className="w-full sm:w-auto p-2 border rounded-lg text-sm sm:text-base"
                 >
                   {allUsers.map((user) => (
                     <option key={user.uid} value={user.uid}>
@@ -649,23 +662,23 @@ const MessageHistoryPage = () => {
         )}
 
         <div className="bg-white rounded-xl shadow-lg">
-          <div className="px-6 pt-6">
-            <nav className="flex space-x-6 border-b">
+          <div className="p-4 sm:p-6">
+            <nav className="flex flex-wrap gap-4 sm:gap-6 border-b">
               <button
-                className={`pb-4 ${
+                className={`pb-2 text-sm sm:text-base ${
                   activeTab === "received"
                     ? "text-indigo-600 border-b-2 border-indigo-600"
-                    : "text-gray-500"
+                    : "text-gray-500 hover:text-indigo-600"
                 }`}
                 onClick={() => setActiveTab("received")}
               >
                 Incoming
               </button>
               <button
-                className={`pb-4 ${
+                className={`pb-2 text-sm sm:text-base ${
                   activeTab === "sent"
                     ? "text-indigo-600 border-b-2 border-indigo-600"
-                    : "text-gray-500"
+                    : "text-gray-500 hover:text-indigo-600"
                 }`}
                 onClick={() => setActiveTab("sent")}
               >
@@ -673,9 +686,9 @@ const MessageHistoryPage = () => {
               </button>
             </nav>
 
-            <div className="flex justify-between py-4 gap-4">
+            <div className="flex flex-col sm:flex-row justify-between py-4 gap-4">
               <select
-                className="p-2 border rounded-lg"
+                className="p-2 border rounded-lg text-sm sm:text-base w-full sm:w-auto"
                 value={timeFilter}
                 onChange={(e) => setTimeFilter(e.target.value)}
               >
@@ -684,21 +697,21 @@ const MessageHistoryPage = () => {
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
               </select>
-              <div className="flex space-x-3">
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                 <div className="relative">
                   <button
-                    className="flex px-4 py-2 border rounded-lg"
+                    className="flex px-4 py-2 border rounded-lg text-sm sm:text-base w-full sm:w-auto"
                     onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                   >
                     Filter
                   </button>
                   {showFilterDropdown && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg">
+                    <div className="absolute right-0 mt-2 w-48 sm:w-64 bg-white rounded-lg shadow-lg z-10">
                       <button
-                        className={`w-full text-left p-2 ${
+                        className={`w-full text-left p-2 text-sm sm:text-base ${
                           typeFilter === "all"
                             ? "text-indigo-600"
-                            : "text-gray-700"
+                            : "text-gray-700 hover:bg-gray-100"
                         }`}
                         onClick={() => {
                           setTypeFilter("all");
@@ -710,10 +723,10 @@ const MessageHistoryPage = () => {
                       {uniqueTypes.map((type) => (
                         <button
                           key={type}
-                          className={`w-full text-left p-2 ${
+                          className={`w-full text-left p-2 text-sm sm:text-base ${
                             typeFilter === type
                               ? "text-indigo-600"
-                              : "text-gray-700"
+                              : "text-gray-700 hover:bg-gray-100"
                           }`}
                           onClick={() => {
                             setTypeFilter(type);
@@ -728,15 +741,15 @@ const MessageHistoryPage = () => {
                 </div>
                 <div className="relative">
                   <button
-                    className="flex px-4 py-2 bg-indigo-600 text-white rounded-lg"
+                    className="flex px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm sm:text-base w-full sm:w-auto"
                     onClick={() => setShowPrintDropdown(!showPrintDropdown)}
                   >
                     Export
                   </button>
                   {showPrintDropdown && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg">
+                    <div className="absolute right-0 mt-2 w-48 sm:w-64 bg-white rounded-lg shadow-lg z-10">
                       <button
-                        className="w-full text-left p-2"
+                        className="w-full text-left p-2 text-sm sm:text-base text-gray-700 hover:bg-gray-100"
                         onClick={() =>
                           handlePrint(
                             viewMode === "all"
@@ -760,11 +773,11 @@ const MessageHistoryPage = () => {
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-32">
-              <div className="h-16 w-16 rounded-full border-t-4 border-b-4 border-indigo-500 animate-spin"></div>
+            <div className="flex justify-center py-16 sm:py-32">
+              <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full border-t-4 border-b-4 border-indigo-500 animate-spin"></div>
             </div>
           ) : (
-            <div className="px-6 pb-6">
+            <div className="p-4 sm:p-6 overflow-x-auto">
               {viewMode === "individual" && (
                 <>
                   <div
@@ -772,58 +785,76 @@ const MessageHistoryPage = () => {
                     id="receivedMessagesTable"
                   >
                     {filteredReceivedMessages.length === 0 ? (
-                      <div className="text-center py-12">
+                      <div className="text-center py-12 text-sm sm:text-base">
                         No received messages
                       </div>
                     ) : (
-                      <table className="w-full">
+                      <table className="w-full min-w-[640px] border-collapse">
                         <thead>
                           <tr className="bg-gray-50">
-                            <th className="px-4 py-3">From</th>
-                            <th className="px-4 py-3">Type</th>
-                            <th className="px-4 py-3">ID</th>
-                            <th className="px-4 py-3">Subject</th>
-                            <th className="px-4 py-3">Date Sent</th>
-                            <th className="px-4 py-3">Date Received</th>
-                            <th className="px-4 py-3">Channel</th>
-                            <th className="px-4 py-3">Format</th>
-                            <th className="px-4 py-3">Attachment</th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              From
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Type
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              ID
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Subject
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Date Sent
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Date Received
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Channel
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Format
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Attachment
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredReceivedMessages.map((message) => (
                             <tr key={message.id}>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.sender ||
                                   message.staffName ||
                                   "System"}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.communicationType || message.type}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.documentId || message.id}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.subject || message.description}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {formatTimestamp(
                                   message.dateSent || message.timestamp
                                 )}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {formatTimestamp(
                                   message.dateReceived || message.timestamp
                                 )}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.channel || "Unknown"}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.fileFormat || "Unknown"}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.fileUrl ? (
                                   message.fileFormat.toLowerCase() === "png" ||
                                   message.fileFormat.toLowerCase() === "jpg" ||
@@ -832,14 +863,14 @@ const MessageHistoryPage = () => {
                                     <img
                                       src={message.fileUrl}
                                       alt="Attachment"
-                                      className="max-w-[100px] max-h-[100px] object-cover"
+                                      className="w-16 sm:w-20 h-16 sm:h-20 object-cover"
                                     />
                                   ) : (
                                     <a
                                       href={message.fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-blue-600 underline"
+                                      className="text-blue-600 underline text-xs sm:text-sm"
                                     >
                                       View File
                                     </a>
@@ -859,46 +890,66 @@ const MessageHistoryPage = () => {
                     id="sentMessagesTable"
                   >
                     {filteredSentMessages.length === 0 ? (
-                      <div className="text-center py-12">No sent messages</div>
+                      <div className="text-center py-12 text-sm sm:text-base">
+                        No sent messages
+                      </div>
                     ) : (
-                      <table className="w-full">
+                      <table className="w-full min-w-[640px] border-collapse">
                         <thead>
                           <tr className="bg-gray-50">
-                            <th className="px-4 py-3">To</th>
-                            <th className="px-4 py-3">Type</th>
-                            <th className="px-4 py-3">ID</th>
-                            <th className="px-4 py-3">Subject</th>
-                            <th className="px-4 py-3">Date Sent</th>
-                            <th className="px-4 py-3">Channel</th>
-                            <th className="px-4 py-3">Format</th>
-                            <th className="px-4 py-3">Attachment</th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              To
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Type
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              ID
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Subject
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Date Sent
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Channel
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Format
+                            </th>
+                            <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                              Attachment
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredSentMessages.map((message) => (
                             <tr key={message.id}>
-                              <td className="px-4 py-4">{message.receiver}</td>
-                              <td className="px-4 py-3">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
+                                {message.receiver}
+                              </td>
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.communicationType || message.type}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.documentId || message.id}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.subject || message.description}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {formatTimestamp(
                                   message.dateSent || message.timestamp
                                 )}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.channel || "Unknown"}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.fileFormat || "Unknown"}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                                 {message.fileUrl ? (
                                   message.fileFormat.toLowerCase() === "png" ||
                                   message.fileFormat.toLowerCase() === "jpg" ||
@@ -907,14 +958,14 @@ const MessageHistoryPage = () => {
                                     <img
                                       src={message.fileUrl}
                                       alt="Attachment"
-                                      className="max-w-[100px] max-h-[100px] object-cover"
+                                      className="w-16 sm:w-20 h-16 sm:h-20 object-cover"
                                     />
                                   ) : (
                                     <a
                                       href={message.fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-blue-600 underline"
+                                      className="text-blue-600 underline text-xs sm:text-sm"
                                     >
                                       View File
                                     </a>
@@ -934,38 +985,60 @@ const MessageHistoryPage = () => {
               {viewMode === "all" && (
                 <div id="allUsersMessagesTable">
                   {allUsersData.length === 0 ? (
-                    <div className="text-center py-12">No messages</div>
+                    <div className="text-center py-12 text-sm sm:text-base">
+                      No messages
+                    </div>
                   ) : (
-                    <table className="w-full">
+                    <table className="w-full min-w-[640px] border-collapse">
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="px-4 py-3">User</th>
-                          <th className="px-4 py-3">Direction</th>
-                          <th className="px-4 py-3">
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                            User
+                          </th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                            Direction
+                          </th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
                             {activeTab === "received" ? "From" : "To"}
                           </th>
-                          <th className="px-4 py-3">Type</th>
-                          <th className="px-4 py-3">Subject</th>
-                          <th className="px-4 py-3">Date</th>
-                          <th className="px-4 py-3">Attachment</th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                            Type
+                          </th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                            Subject
+                          </th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                            Date
+                          </th>
+                          <th className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-left">
+                            Attachment
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {filterAllUsersData().map((message) => (
                           <tr key={message.id + message.userId}>
-                            <td className="px-4 py-4">{message.userName}</td>
-                            <td className="px-4 py-4">{message.messageType}</td>
-                            <td className="px-4 py-4">
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
+                              {message.userName}
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
+                              {message.messageType}
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                               {message.messageType === "received"
                                 ? message.sender || "System"
                                 : message.receiver}
                             </td>
-                            <td className="px-4 py-4">{message.type}</td>
-                            <td className="px-4 py-4">{message.subject}</td>
-                            <td className="px-4 py-4">
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
+                              {message.type}
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
+                              {message.subject}
+                            </td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                               {formatTimestamp(message.timestamp)}
                             </td>
-                            <td className="px-4 py-4">
+                            <td className="px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                               {message.fileUrl ? (
                                 message.fileFormat.toLowerCase() === "png" ||
                                 message.fileFormat.toLowerCase() === "jpg" ||
@@ -973,14 +1046,14 @@ const MessageHistoryPage = () => {
                                   <img
                                     src={message.fileUrl}
                                     alt="Attachment"
-                                    className="max-w-[100px] max-h-[100px] object-cover"
+                                    className="w-16 sm:w-20 h-16 sm:h-20 object-cover"
                                   />
                                 ) : (
                                   <a
                                     href={message.fileUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-600 underline"
+                                    className="text-blue-600 underline text-xs sm:text-sm"
                                   >
                                     View File
                                   </a>

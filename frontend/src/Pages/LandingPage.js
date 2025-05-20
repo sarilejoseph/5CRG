@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import bgLogin from "../Assets/bgmain.png";
 import logo from "../Assets/logo.png";
 import { Link } from "react-router-dom";
+import { FaFacebook, FaYoutube, FaInstagram, FaTwitter } from "react-icons/fa";
 
 const LandingPage = () => {
   const headerVariants = {
@@ -131,13 +132,51 @@ const LandingPage = () => {
         </motion.div>
 
         <motion.footer
-          className="bg-gray-900 text-gray-400 text-sm text-center py-3 mt-auto"
+          className="bg-gray-900 text-gray-400 text-sm py-2 mt-auto"
           initial="hidden"
           animate="visible"
           variants={footerVariants}
         >
-          &copy; {new Date().getFullYear()} 5th Civil Relations Group AFP. All
-          rights reserved.
+          <div className="flex justify-between items-center px-8">
+            <div>
+              © {new Date().getFullYear()} 5th Civil Relations Group AFP. All
+              rights reserved.
+            </div>
+            <div className="flex space-x-4">
+              <a
+                href="https://www.facebook.com/5thcrg"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <FaFacebook size={20} />
+              </a>
+              <a
+                href="https://www.youtube.com/@5crgcrsafp"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <FaYoutube size={20} />
+              </a>
+              <a
+                href="https://www.instagram.com/5thcrg?fbclid=IwY2xjawKYxSlleHRuA2FlbQIxMABicmlkETFvc1NOU2pLbWRCMnNPd201AR7NEM1OV7OJhUuVyNzL50D6Qe-2xgoI4Hs4TUwQKWkCy7FgkAxVjZ-U256fJw_aem_egvlacZB-vgRJk3ERHHuvw"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <FaInstagram size={20} />
+              </a>
+              <a
+                href="https://x.com/5thCRG?fbclid=IwY2xjawKYxU5leHRuA2FlbQIxMABicmlkETFvc1NOU2pLbWRCMnNPd201AR7eNSfBHkzmbND99_AersRSharwLFYCcu41xDCuJhfVLExtVQPdS4PG-gvEtA_aem_0qgFgyElvBAcjS6hu_hbSg"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <FaTwitter size={20} />
+              </a>
+            </div>
+          </div>
         </motion.footer>
       </div>
 

@@ -107,11 +107,18 @@ const LandingPage = () => {
           </motion.p>
 
           <motion.p
-            className="italic text-lg text-white max-w-lg mb-8 shadow-text"
+            className="italic text-lg text-white max-w-lg mb-4 shadow-text"
             variants={itemVariants}
           >
             "Strength in unity, service with integrity—5th CRG, CRSAFP,
             committed to truth, duty, and country."
+          </motion.p>
+
+          <motion.p
+            className="text-white text-3xl font-semibold mb-8 shadow-text"
+            variants={itemVariants}
+          >
+            Alights Reserve
           </motion.p>
 
           <motion.div className="mb-6" variants={logoVariants}>
@@ -132,48 +139,52 @@ const LandingPage = () => {
         </motion.div>
 
         <motion.footer
-          className="bg-gray-900 text-gray-400 text-sm py-2 mt-auto"
+          className="bg-gray-900 text-gray-300 text-sm py-4 mt-auto shadow-inner"
           initial="hidden"
           animate="visible"
           variants={footerVariants}
         >
-          <div className="flex justify-between items-center px-8">
-            <div>
+          <div className="container mx-auto px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-center sm:text-left font-medium">
               © {new Date().getFullYear()} 5th Civil Relations Group AFP. All
-              rights reserved.
+              Rights Reserved.
             </div>
-            <div className="flex space-x-4">
+            <div className="flex space-x-6">
               <a
                 href="https://www.facebook.com/5thcrg"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors duration-200"
+                aria-label="Facebook"
               >
-                <FaFacebook size={20} />
+                <FaFacebook size={24} />
               </a>
               <a
                 href="https://www.youtube.com/@5crgcrsafp"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors duration-200"
+                aria-label="YouTube"
               >
-                <FaYoutube size={20} />
+                <FaYoutube size={24} />
               </a>
               <a
                 href="https://www.instagram.com/5thcrg?fbclid=IwY2xjawKYxSlleHRuA2FlbQIxMABicmlkETFvc1NOU2pLbWRCMnNPd201AR7NEM1OV7OJhUuVyNzL50D6Qe-2xgoI4Hs4TUwQKWkCy7FgkAxVjZ-U256fJw_aem_egvlacZB-vgRJk3ERHHuvw"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors duration-200"
+                aria-label="Instagram"
               >
-                <FaInstagram size={20} />
+                <FaInstagram size={24} />
               </a>
               <a
                 href="https://x.com/5thCRG?fbclid=IwY2xjawKYxU5leHRuA2FlbQIxMABicmlkETFvc1NOU2pLbWRCMnNPd201AR7eNSfBHkzmbND99_AersRSharwLFYCcu41xDCuJhfVLExtVQPdS4PG-gvEtA_aem_0qgFgyElvBAcjS6hu_hbSg"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-300 hover:text-white transition-colors duration-200"
+                aria-label="Twitter"
               >
-                <FaTwitter size={20} />
+                <FaTwitter size={24} />
               </a>
             </div>
           </div>
@@ -183,6 +194,15 @@ const LandingPage = () => {
       <style jsx>{`
         .shadow-text {
           text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        footer {
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        footer a {
+          transition: transform 0.2s ease-in-out;
+        }
+        footer a:hover {
+          transform: scale(1.1);
         }
       `}</style>
     </div>

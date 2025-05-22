@@ -118,7 +118,7 @@ const LandingPage = () => {
             className="text-white text-3xl font-semibold mb-8 shadow-text"
             variants={itemVariants}
           >
-            Alights Reserve
+            Gawa na laging may puso
           </motion.p>
 
           <motion.div className="mb-6" variants={logoVariants}>

@@ -19,11 +19,16 @@ const LoginPage = () => {
       console.log("Login Successful");
       navigate("/dashboard");
     } catch (err) {
-      console.log(err);
+      console.error("Login error:", err.code, err.message);
       if (err.code === "auth/user-not-found") {
         setErrorMessage(
           "The account with this email doesn't exist. Please sign up first."
         );
+      } else if (
+        err.code === "auth/wrong-password" ||
+        err.code === "auth/invalid-credential"
+      ) {
+        setErrorMessage("Email or password is incorrect.");
       } else {
         setErrorMessage("An error occurred. Please try again later.");
       }

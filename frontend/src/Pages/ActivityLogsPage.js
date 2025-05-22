@@ -205,145 +205,145 @@ function ActivityLogsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="container mt-10 mx-auto max-w-7xl">
-        <h1 className="text-3xl font-bold text-indigo-900 mb-4">
+    <div className="bg-slate-50 min-h-screen">
+      <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 max-w-full">
+        <h1 className="text-2xl sm:text-3xl font-bold text-indigo-900 mb-4">
           Activity Logs
         </h1>
 
-        <main className="max-w-7xl mx-auto">
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200 flex items-center space-x-4">
-              <div className="flex-1">
-                <p className="text-sm text-gray-500">
-                  Search by log ID, action, or description
-                </p>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search logs..."
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg sm:w-64"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                  <div className="absolute left-3 top-2.5">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-                  </div>
-                </div>
-                {isAdmin && (
-                  <div className="w-64">
-                    <select
-                      className="w-full px-3 py-2 border rounded-lg"
-                      value={selectedUsername}
-                      onChange={(e) => setSelectedUsername(e.target.value)}
-                    >
-                      <option value="">All Users</option>
-                      {Object.values(usernames).map((username) => (
-                        <option key={username} value={username}>
-                          {username}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
+        <main className="bg-white rounded-xl shadow-lg">
+          <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row items-center sm:space-x-4">
+            <div className="flex-1">
+              <p className="text-sm sm:text-base text-gray-500">
+                Search by log ID, action, or description
+              </p>
             </div>
-
-            {errorMessage && (
-              <div
-                className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mx-4 mt-4"
-                role="alert"
-              >
-                <span className="block sm:inline">{errorMessage}</span>
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 mt-2 sm:mt-0">
+              <div className="relative w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Search logs..."
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm sm:text-base sm:w-64"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="absolute left-3 top-2.5">
+                  <svg
+                    className="h-5 w-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
               </div>
-            )}
+              {isAdmin && (
+                <div className="w-full sm:w-64">
+                  <select
+                    className="w-full px-3 py-2 border rounded-lg text-sm sm:text-base"
+                    value={selectedUsername}
+                    onChange={(e) => setSelectedUsername(e.target.value)}
+                  >
+                    <option value="">All Users</option>
+                    {Object.values(usernames).map((username) => (
+                      <option key={username} value={username}>
+                        {username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Log ID
+          {errorMessage && (
+            <div
+              className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mx-4 sm:mx-6 mt-4"
+              role="alert"
+            >
+              <span className="block sm:inline text-sm sm:text-base">
+                {errorMessage}
+              </span>
+            </div>
+          )}
+
+          <div className="p-4 sm:p-6 overflow-x-auto">
+            <table className="w-full min-w-[640px] divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Log ID
+                  </th>
+                  {isAdmin && (
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      Username
                     </th>
-                    {isAdmin && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Username
-                      </th>
-                    )}
-                    {isAdmin && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        User ID
-                      </th>
-                    )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Action
+                  )}
+                  {isAdmin && (
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      User ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLogs.length > 0 ? (
-                    filteredLogs.map((log) => (
-                      <tr
-                        key={`${log.userId}-${log.key}`}
-                        className="hover:bg-gray-50"
-                      >
-                        <td className="px-6 py-4 text-sm font-mono text-gray-500">
-                          {log.logId}
+                  )}
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Action
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Description
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredLogs.length > 0 ? (
+                  filteredLogs.map((log) => (
+                    <tr
+                      key={`${log.userId}-${log.key}`}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base font-mono text-gray-500">
+                        {log.logId}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                          {log.username}
                         </td>
-                        {isAdmin && (
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {log.username}
-                          </td>
-                        )}
-                        {isAdmin && (
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {log.userId}
-                          </td>
-                        )}
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                          {log.action || "N/A"}
+                      )}
+                      {isAdmin && (
+                        <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                          {log.userId}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {log.description || "No description"}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {formatDate(log.timestamp)}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={isAdmin ? 6 : 4}
-                        className="px-6 py-4 text-center text-sm text-gray-500"
-                      >
-                        No logs found
+                      )}
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base font-medium text-gray-900">
+                        {log.action || "N/A"}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {log.description || "No description"}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {formatDate(log.timestamp)}
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? 6 : 3}
+                      className="px-2 sm:px-4 py-2 sm:py-4 text-center text-sm sm:text-base text-gray-500"
+                    >
+                      No logs found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </main>
       </div>

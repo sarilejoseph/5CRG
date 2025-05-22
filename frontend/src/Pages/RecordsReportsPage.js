@@ -18,7 +18,7 @@ const MessageHistoryPage = () => {
   const [timeFilter, setTimeFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [showPrintDropdown, setShowPrintDropdown] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [uniqueTypes, setUniqueTypes] = useState([]);
   const [activeTab, setActiveTab] = useState("received");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -413,180 +413,384 @@ const MessageHistoryPage = () => {
 
   const handlePrint = (section) => {
     const printContent = document.getElementById(section);
-    if (!printContent) return;
+    if (!printContent) {
+      console.error(`Print content element with ID "${section}" not found`);
+      alert("Error: Could not find report content to print.");
+      return;
+    }
+
+    // Preload images to ensure they are available
+    const preloadImages = (urls) => {
+      const promises = urls.map((url) => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            console.log(`Image loaded: ${url}`);
+            resolve(url);
+          };
+          img.onerror = () => {
+            console.warn(`Failed to load image: ${url}`);
+            resolve(url); // Continue even if image fails
+          };
+        });
+      });
+      return Promise.all(promises);
+    };
+
+    // Collect image URLs (header logos and attachment images)
+    const imageUrls = [crs, crg];
+    const messages =
+      section === "receivedMessagesTable"
+        ? filteredReceivedMessages
+        : section === "sentMessagesTable"
+        ? filteredSentMessages
+        : filterAllUsersData();
+    messages.forEach((message) => {
+      if (message.fileUrl && message.fileFormat?.match(/png|jpg|jpeg/i)) {
+        imageUrls.push(message.fileUrl);
+      }
+    });
+
+    // Open print window
     const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Message History Report</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-            body { 
-              font-family: 'Inter', sans-serif;
-              color: #1e293b;
-              line-height: 1.6;
-              margin: 20px;
-              font-size: 14px;
-            }
-            .official-header {
-              text-align: center;
-              margin-bottom: 20px;
-              border-bottom: 1px solid #e2e8f0;
-              padding-bottom: 10px;
-              position: relative;
-            }
-            .vision-text {
-              color: rgb(171, 172, 173);
-              font-size: 12px;
-              margin-bottom: 4px;
-            }
-            .main-title {
-              font-size: 20px;
-              font-weight: 700;
-              color: rgb(0, 0, 0);
-              margin: 8px 0;
-              letter-spacing: 0.5px;
-            }
-            .subtitle {
-              font-size: 16px;
-              font-weight: 600;
-              color: rgb(0, 0, 0);
-              margin: 4px 0;
-            }
-            .address-text {
-              font-size: 12px;
-              color: #6c757d;
-              margin: 4px 0;
-            }
-            .contact-text {
-              font-size: 10px;
-              color: #6c757d;
-            }
-            .logo-left, .logo-right {
-              position: absolute;
-              top: 10px;
-              width: 50px;
-              height: 50px;
-            }
-            .logo-left { left: 0; }
-            .logo-right { right: 0; }
-            table { 
-              width: 100%; 
-              border-collapse: collapse;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-              border-radius: 6px;
-              overflow: hidden;
-              margin-bottom: 20px;
-            }
-            th, td { 
-              border: none;
-              padding: 8px 12px;
-              text-align: left;
-              font-size: 12px;
-            }
-            th { 
-              background-color: #3b82f6;
-              color: white;
-              font-weight: 600;
-              text-transform: uppercase;
-              font-size: 10px;
-              letter-spacing: 0.5px;
-            }
-            td {
-              border-bottom: 1px solid #e2e8f0;
-            }
-            tr:nth-child(even) {
-              background-color: #f8fafc;
-            }
-            tr:last-child td {
-              border-bottom: none;
-            }
-            .content-header { 
-              margin-bottom: 15px;
-            }
-            h1 { 
-              color: #1e40af;
-              font-weight: 700;
-              margin-bottom: 8px;
-              font-size: 18px;
-            }
-            p {
-              color: #64748b;
-              font-size: 12px;
-            }
-            .footer {
-              margin-top: 20px;
-              padding-top: 10px;
-              border-top: 1px solid #e2e8f0;
-              text-align: center;
-              font-size: 10px;
-              color: #6c757d;
-            }
-            img {
-              max-width: 80px;
-              max-height: 80px;
-              object-fit: contain;
-              display: block;
-            }
-            td:last-child {
-              width: 100px;
-            }
-            @media print {
-              body { margin: 10mm; font-size: 12px; }
-              .logo-left, .logo-right { width: 40px; height: 40px; }
-              table { page-break-inside: auto; }
-              tr { page-break-inside: avoid; page-break-after: auto; }
-              th, td { padding: 6px 10px; }
-              img { max-width: 60px; max-height: 60px; }
-            }
-            @media screen and (max-width: 600px) {
-              body { margin: 10px; font-size: 12px; }
-              th, td { padding: 6px 8px; font-size: 10px; }
-              .logo-left, .logo-right { width: 40px; height: 40px; }
-              h1 { font-size: 16px; }
-              .main-title { font-size: 18px; }
-              .subtitle { font-size: 14px; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="official-header">
-            <img src="${crs}" alt="AFP Logo" class="logo-left">
-            <div class="vision-text">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
-            <div class="main-title">HEADQUARTERS</div>
-            <div class="subtitle">5<sup>th</sup> CIVIL RELATIONS GROUP</div>
-            <div class="subtitle">CIVIL RELATIONS SERVICE AFP</div>
-            <div class="address-text">Naval Station Felix Apolinario, Panacan, Davao City</div>
-            <div class="contact-text">crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433</div>
-            <img src="${crg}" alt="Civil Relations Service Logo" class="logo-right">
-          </div>
-          
-          <div class="content-header">
-            <h1>${
-              section === "receivedMessagesTable"
-                ? "Received Messages History"
-                : section === "sentMessagesTable"
-                ? "Sent Messages History"
-                : "All Users Messages History"
-            }</h1>
-            <p>Generated on: ${new Date().toLocaleString()}</p>
-            ${viewMode === "all" ? "<p>Aggregated data for all users</p>" : ""}
-          </div>
-          ${printContent.outerHTML}
-          <div class="footer">
-            <p>Generated by: User ID - ${user?.uid || "Unknown"}${
+    if (!printWindow) {
+      console.error("Failed to open print window. Check pop-up blocker.");
+      alert("Unable to open print window. Please allow pop-ups for this site.");
+      return;
+    }
+
+    // Write content after preloading images
+    preloadImages(imageUrls)
+      .then(() => {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Message History Report</title>
+              <style>
+                body { 
+                  font-family: Arial, Helvetica, sans-serif;
+                  color: #1e293b;
+                  line-height: 1.6;
+                  margin: 20px;
+                  font-size: 14px;
+                }
+                .official-header {
+                  text-align: center;
+                  margin-bottom: 20px;
+                  border-bottom: 1px solid #e2e8f0;
+                  padding-bottom: 10px;
+                  position: relative;
+                }
+                .vision-text {
+                  color: rgb(171, 172, 173);
+                  font-size: 12px;
+                  margin-bottom: 4px;
+                }
+                .main-title {
+                  font-size: 20px;
+                  font-weight: 700;
+                  color: rgb(0, 0, 0);
+                  margin: 8px 0;
+                  letter-spacing: 0.5px;
+                }
+                .subtitle {
+                  font-size: 16px;
+                  font-weight: 600;
+                  color: rgb(0, 0, 0);
+                  margin: 4px 0;
+                }
+                .address-text {
+                  font-size: 12px;
+                  color: #6c757d;
+                  margin: 4px 0;
+                }
+                .contact-text {
+                  font-size: 10px;
+                  color: #6c757d;
+                }
+                .logo-left, .logo-right {
+                  position: absolute;
+                  top: 10px;
+                  width: 50px;
+                  height: 50px;
+                }
+                .logo-left { left: 0; }
+                .logo-right { right: 0; }
+                table { 
+                  width: 100%; 
+                  border-collapse: collapse;
+                  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                  border-radius: 6px;
+                  overflow: hidden;
+                  margin-bottom: 20px;
+                }
+                th, td { 
+                  border: none;
+                  padding: 8px 12px;
+                  text-align: left;
+                  font-size: 12px;
+                }
+                th { 
+                  background-color: #3b82f6;
+                  color: white;
+                  font-weight: 600;
+                  text-transform: uppercase;
+                  font-size: 10px;
+                  letter-spacing: 0.5px;
+                }
+                td {
+                  border-bottom: 1px solid #e2e8f0;
+                }
+                tr:nth-child(even) {
+                  background-color: #f8fafc;
+                }
+                tr:last-child td {
+                  border-bottom: none;
+                }
+                .content-header { 
+                  margin-bottom: 15px;
+                }
+                h1 { 
+                  color: #1e40af;
+                  font-weight: 700;
+                  margin-bottom: 8px;
+                  font-size: 18px;
+                }
+                p {
+                  color: #64748b;
+                  font-size: 12px;
+                }
+                .footer {
+                  margin-top: 20px;
+                  padding-top: 10px;
+                  border-top: 1px solid #e2e8f0;
+                  text-align: center;
+                  font-size: 10px;
+                  color: #6c757d;
+                }
+                img {
+                  max-width: 80px;
+                  max-height: 80px;
+                  object-fit: contain;
+                  display: block;
+                }
+                td:last-child {
+                  width: 100px;
+                }
+                @media print {
+                  body { margin: 10mm; font-size: 12px; }
+                  .logo-left, .logo-right { width: 40px; height: 40px; }
+                  table { page-break-inside: auto; }
+                  tr { page-break-inside: avoid; page-break-after: auto; }
+                  th, td { padding: 6px 10px; }
+                  img { max-width: 60px; max-height: 60px; }
+                }
+                @media screen and (max-width: 600px) {
+                  body { margin: 10px; font-size: 12px; }
+                  th, td { padding: 6px 8px; font-size: 10px; }
+                  .logo-left, .logo-right { width: 40px; height: 40px; }
+                  h1 { font-size: 16px; }
+                  .main-title { font-size: 18px; }
+                  .subtitle { font-size: 14px; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="official-header">
+                <img src="${crs}" alt="AFP Logo" class="logo-left" onerror="this.style.display='none'">
+                <div class="vision-text">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
+                <div class="main-title">HEADQUARTERS</div>
+                <div class="subtitle">5<sup>th</sup> CIVIL RELATIONS GROUP</div>
+                <div class="subtitle">CIVIL RELATIONS SERVICE AFP</div>
+                <div class="address-text">Naval Station Felix Apolinario, Panacan, Davao City</div>
+                <div class="contact-text">crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433</div>
+                <img src="${crg}" alt="Civil Relations Service Logo" class="logo-right" onerror="this.style.display='none'">
+              </div>
+              <div class="content-header">
+                <h1>${
+                  section === "receivedMessagesTable"
+                    ? "Received Messages History"
+                    : section === "sentMessagesTable"
+                    ? "Sent Messages History"
+                    : "All Users Messages History"
+                }</h1>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+                ${
+                  viewMode === "all"
+                    ? "<p>Aggregated data for all users</p>"
+                    : ""
+                }
+              </div>
+              ${printContent.outerHTML.replace(
+                /<a[^>]*>View File<\/a>/g,
+                "File Attached"
+              )}
+              <div class="footer">
+                <p>Generated by: User ID - ${user?.uid || "Unknown"}${
+          user?.email ? ` | Email - ${user?.email}` : ""
+        }</p>
+              </div>
+              <script>
+                // Fallback for Chrome: Trigger print after 1s if onload fails
+                setTimeout(() => {
+                  if (document.readyState === 'complete') {
+                    window.print();
+                  }
+                }, 1000);
+                // Close window after print dialog
+                window.onafterprint = () => {
+                  window.close();
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        console.log(`Print window opened for section: ${section}`);
+      })
+      .catch((error) => {
+        console.error("Error preloading images:", error);
+        printWindow.close();
+        alert("Failed to load report content. Please try again.");
+      });
+    setShowExportDropdown(false);
+  };
+
+  const handleDownloadPDF = (section) => {
+    const printContent = document.getElementById(section);
+    if (!printContent) {
+      console.error(`PDF content element with ID "${section}" not found`);
+      alert("Error: Could not find report content to download.");
+      return;
+    }
+
+    // Preload images to ensure they are available
+    const preloadImages = (urls) => {
+      const promises = urls.map((url) => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.src = url;
+          img.onload = () => {
+            console.log(`Image loaded for PDF: ${url}`);
+            resolve(url);
+          };
+          img.onerror = () => {
+            console.warn(`Failed to load image for PDF: ${url}`);
+            resolve(url); // Continue even if image fails
+          };
+        });
+      });
+      return Promise.all(promises);
+    };
+
+    // Collect image URLs
+    const imageUrls = [crs, crg];
+    const messages =
+      section === "receivedMessagesTable"
+        ? filteredReceivedMessages
+        : section === "sentMessagesTable"
+        ? filteredSentMessages
+        : filterAllUsersData();
+    messages.forEach((message) => {
+      if (message.fileUrl && message.fileFormat?.match(/png|jpg|jpeg/i)) {
+        imageUrls.push(message.fileUrl);
+      }
+    });
+
+    // Create a temporary container for PDF content
+    const tempContainer = document.createElement("div");
+    tempContainer.style.position = "absolute";
+    tempContainer.style.left = "-9999px";
+    tempContainer.innerHTML = `
+      <div style="font-family: Arial, Helvetica, sans-serif; color: #1e293b; line-height: 1.6; margin: 20px; font-size: 14px;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; position: relative;">
+          <img src="${crs}" alt="AFP Logo" style="position: absolute; top: 10px; left: 0; width: 50px; height: 50px;" onerror="this.style.display='none'">
+          <div style="color: rgb(171, 172, 173); font-size: 12px; margin-bottom: 4px;">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
+          <div style="font-size: 20px; font-weight: 700; color: rgb(0, 0, 0); margin: 8px 0; letter-spacing: 0.5px;">HEADQUARTERS</div>
+          <div style="font-size: 16px; font-weight: 600; color: rgb(0, 0, 0); margin: 4px 0;">5<sup>th</sup> CIVIL RELATIONS GROUP</div>
+          <div style="font-size: 16px; font-weight: 600; color: rgb(0, 0, 0); margin: 4px 0;">CIVIL RELATIONS SERVICE AFP</div>
+          <div style="font-size: 12px; color: #6c757d; margin: 4px 0;">Naval Station Felix Apolinario, Panacan, Davao City</div>
+          <div style="font-size: 10px; color: #6c757d;">crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433</div>
+          <img src="${crg}" alt="Civil Relations Service Logo" style="position: absolute; top: 10px; right: 0; width: 50px; height: 50px;" onerror="this.style.display='none'">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <h1 style="color: #1e40af; font-weight: 700; margin-bottom: 8px; font-size: 18px;">${
+            section === "receivedMessagesTable"
+              ? "Received Messages History"
+              : section === "sentMessagesTable"
+              ? "Sent Messages History"
+              : "All Users Messages History"
+          }</h1>
+          <p style="color: #64748b; font-size: 12px;">Generated on: ${new Date().toLocaleString()}</p>
+          ${
+            viewMode === "all"
+              ? '<p style="color: #64748b; font-size: 12px;">Aggregated data for all users</p>'
+              : ""
+          }
+        </div>
+        ${printContent.outerHTML.replace(
+          /<a[^>]*>View File<\/a>/g,
+          "File Attached"
+        )}
+        <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 10px; color: #6c757d;">
+          <p>Generated by: User ID - ${user?.uid || "Unknown"}${
       user?.email ? ` | Email - ${user?.email}` : ""
     }</p>
-          </div>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 500);
-    setShowPrintDropdown(false);
+        </div>
+      </div>
+    `;
+    document.body.appendChild(tempContainer);
+
+    // Preload images before generating PDF
+    preloadImages(imageUrls)
+      .then(() => {
+        // Load html2pdf.js via CDN and generate PDF
+        const script = document.createElement("script");
+        script.src =
+          "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+        script.onload = () => {
+          window
+            .html2pdf()
+            .set({
+              margin: 10,
+              filename: `${
+                section === "receivedMessagesTable"
+                  ? "Received_Messages"
+                  : section === "sentMessagesTable"
+                  ? "Sent_Messages"
+                  : "All_Users_Messages"
+              }_${new Date().toISOString().split("T")[0]}.pdf`,
+              image: { type: "jpeg", quality: 0.95 },
+              html2canvas: { scale: 2, useCORS: true },
+              jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            })
+            .from(tempContainer)
+            .save()
+            .then(() => {
+              document.body.removeChild(tempContainer);
+              setShowExportDropdown(false);
+            })
+            .catch((error) => {
+              console.error("Error generating PDF:", error);
+              alert("Failed to generate PDF. Please try again.");
+              document.body.removeChild(tempContainer);
+            });
+        };
+        script.onerror = () => {
+          console.error("Failed to load html2pdf.js");
+          alert(
+            "Failed to load PDF library. Please check your internet connection."
+          );
+          document.body.removeChild(tempContainer);
+        };
+        document.head.appendChild(script);
+      })
+      .catch((error) => {
+        console.error("Error preloading images for PDF:", error);
+        alert("Failed to load images for PDF. Please try again.");
+        document.body.removeChild(tempContainer);
+      });
   };
 
   const toggleViewMode = (mode) => {
@@ -742,11 +946,11 @@ const MessageHistoryPage = () => {
                 <div className="relative">
                   <button
                     className="flex px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm sm:text-base w-full sm:w-auto"
-                    onClick={() => setShowPrintDropdown(!showPrintDropdown)}
+                    onClick={() => setShowExportDropdown(!showExportDropdown)}
                   >
                     Export
                   </button>
-                  {showPrintDropdown && (
+                  {showExportDropdown && (
                     <div className="absolute right-0 mt-2 w-48 sm:w-64 bg-white rounded-lg shadow-lg z-10">
                       <button
                         className="w-full text-left p-2 text-sm sm:text-base text-gray-700 hover:bg-gray-100"
@@ -759,6 +963,23 @@ const MessageHistoryPage = () => {
                         }
                       >
                         Print{" "}
+                        {viewMode === "all"
+                          ? "All Users"
+                          : activeTab === "received"
+                          ? "Received"
+                          : "Sent"}
+                      </button>
+                      <button
+                        className="w-full text-left p-2 text-sm sm:text-base text-gray-700 hover:bg-gray-100"
+                        onClick={() =>
+                          handleDownloadPDF(
+                            viewMode === "all"
+                              ? "allUsersMessagesTable"
+                              : `${activeTab}MessagesTable`
+                          )
+                        }
+                      >
+                        Download PDF{" "}
                         {viewMode === "all"
                           ? "All Users"
                           : activeTab === "received"

@@ -369,241 +369,245 @@ function ActionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="container mt-10 mx-auto max-w-7xl">
-        <h1 className="text-3xl font-bold text-indigo-900 mb-4">Actions</h1>
+    <div className="bg-slate-50 min-h-screen">
+      <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 max-w-full">
+        <h1 className="text-2xl sm:text-3xl font-bold text-indigo-900 mb-4">
+          Actions
+        </h1>
 
-        <main className="max-w-7xl mx-auto">
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200 flex items-center space-x-4">
-              <nav className="flex flex-wrap">
-                <button
-                  onClick={() => setActiveTab("received")}
-                  className={`px-4 py-2 font-medium text-sm ${
-                    activeTab === "received"
-                      ? "bg-blue-100 text-blue-600 rounded-md"
-                      : "text-gray-500 hover:text-gray-700"
-                  } mr-2 mb-2`}
-                >
-                  Incoming Messages
-                </button>
-                <button
-                  onClick={() => setActiveTab("sent")}
-                  className={`px-4 py-2 font-medium text-sm ${
-                    activeTab === "sent"
-                      ? "bg-blue-100 text-blue-600 rounded-md"
-                      : "text-gray-500 hover:text-gray-700"
-                  } mb-2`}
-                >
-                  Outgoing Messages
-                </button>
-              </nav>
-              <div className="flex-1"></div>
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search messages..."
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg sm:w-64"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                  <div className="absolute left-3 top-2.5">
-                    <svg
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-                  </div>
-                </div>
-                {isAdmin && (
-                  <div className="w-64">
-                    <select
-                      className="w-full px-3 py-2 border rounded-lg"
-                      value={selectedUsername}
-                      onChange={(e) => setSelectedUsername(e.target.value)}
-                    >
-                      <option value="">All Users</option>
-                      {Object.values(usernames).map((username) => (
-                        <option key={username} value={username}>
-                          {username}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {errorMessage && (
-              <div
-                className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mx-4 mt-4"
-                role="alert"
+        <main className="bg-white rounded-xl shadow-lg">
+          <div className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row items-center sm:space-x-4">
+            <nav className="flex flex-wrap gap-4">
+              <button
+                onClick={() => setActiveTab("received")}
+                className={`px-4 py-2 font-medium text-sm sm:text-base ${
+                  activeTab === "received"
+                    ? "bg-blue-100 text-blue-600 rounded-md"
+                    : "text-gray-500 hover:text-gray-700"
+                } mr-2 mb-2`}
               >
-                <span className="block sm:inline">{errorMessage}</span>
+                Incoming Messages
+              </button>
+              <button
+                onClick={() => setActiveTab("sent")}
+                className={`px-4 py-2 font-medium text-sm sm:text-base ${
+                  activeTab === "sent"
+                    ? "bg-blue-100 text-blue-600 rounded-md"
+                    : "text-gray-500 hover:text-gray-700"
+                } mb-2`}
+              >
+                Outgoing Messages
+              </button>
+            </nav>
+            <div className="flex-1"></div>
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 mt-2 sm:mt-0">
+              <div className="relative w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Search messages..."
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm sm:text-base sm:w-64"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="absolute left-3 top-2.5">
+                  <svg
+                    className="h-5 w-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
               </div>
-            )}
+              {isAdmin && (
+                <div className="w-full sm:w-64">
+                  <select
+                    className="w-full px-3 py-2 border rounded-lg text-sm sm:text-base"
+                    value={selectedUsername}
+                    onChange={(e) => setSelectedUsername(e.target.value)}
+                  >
+                    <option value="">All Users</option>
+                    {Object.values(usernames).map((username) => (
+                      <option key={username} value={username}>
+                        {username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {isAdmin && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Username
-                      </th>
-                    )}
-                    {isAdmin && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        User ID
-                      </th>
-                    )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ID
+          {errorMessage && (
+            <div
+              className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mx-4 sm:mx-6 mt-4"
+              role="alert"
+            >
+              <span className="block sm:inline text-sm sm:text-base">
+                {errorMessage}
+              </span>
+            </div>
+          )}
+
+          <div className="p-4 sm:p-6 overflow-x-auto">
+            <table className="w-full min-w-[640px] divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {isAdmin && (
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      Username
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {activeTab === "received" ? "Sender" : "Receiver"}
+                  )}
+                  {isAdmin && (
+                    <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      User ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Channel
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      File
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredMessages.length > 0 ? (
-                    filteredMessages.map((message) => (
-                      <tr
-                        key={`${message.userId}-${message.key}`}
-                        className="hover:bg-gray-50"
-                      >
-                        {isAdmin && (
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {message.username}
-                          </td>
+                  )}
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    ID
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    {activeTab === "received" ? "Sender" : "Receiver"}
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Description
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Channel
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    File
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredMessages.length > 0 ? (
+                  filteredMessages.map((message) => (
+                    <tr
+                      key={`${message.userId}-${message.key}`}
+                      className="hover:bg-gray-50"
+                    >
+                      {isAdmin && (
+                        <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                          {message.username}
+                        </td>
+                      )}
+                      {isAdmin && (
+                        <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                          {message.userId}
+                        </td>
+                      )}
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base font-medium text-gray-900">
+                        {message.id}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {activeTab === "received"
+                          ? message.sender
+                          : message.receiver}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {message.description}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {formatDate(message.timestamp || message.createdAt)}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {message.channel || "N/A"}
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base text-gray-500">
+                        {message.fileUrl ? (
+                          <div className="flex flex-col items-start">
+                            {message.fileFormat &&
+                            message.fileFormat
+                              .toLowerCase()
+                              .match(/png|jpg|jpeg|gif|svg/) ? (
+                              <img
+                                src={message.fileUrl}
+                                alt={message.filename || "File"}
+                                className="h-12 sm:h-16 w-12 sm:w-16 object-cover rounded"
+                              />
+                            ) : (
+                              <div className="h-12 sm:h-16 w-12 sm:w-16 flex items-center justify-center bg-gray-200 rounded">
+                                <svg
+                                  className="h-6 w-6 text-gray-500"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                            <span className="text-xs sm:text-sm mt-1 text-blue-600">
+                              {message.filename || "File"}
+                            </span>
+                          </div>
+                        ) : (
+                          "No file"
                         )}
-                        {isAdmin && (
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {message.userId}
-                          </td>
+                      </td>
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base font-medium">
+                        <button
+                          onClick={() => handleEdit(message)}
+                          className="text-indigo-600 hover:text-indigo-900 mr-3"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(message)}
+                          className="text-red-600 hover:text-red-900 mr-3"
+                        >
+                          Delete
+                        </button>
+                        {message.fileUrl && (
+                          <button
+                            onClick={() => handleDownload(message)}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            Download
+                          </button>
                         )}
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                          {message.id}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {activeTab === "received"
-                            ? message.sender
-                            : message.receiver}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {message.description}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {formatDate(message.timestamp || message.createdAt)}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {message.channel || "N/A"}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {message.fileUrl ? (
-                            <div className="flex flex-col items-start">
-                              {message.fileFormat &&
-                              message.fileFormat
-                                .toLowerCase()
-                                .match(/png|jpg|jpeg|gif|svg/) ? (
-                                <img
-                                  src={message.fileUrl}
-                                  alt={message.filename || "File"}
-                                  className="h-12 w-12 object-cover rounded"
-                                />
-                              ) : (
-                                <div className="h-12 w-12 flex items-center justify-center bg-gray-200 rounded">
-                                  <svg
-                                    className="h-6 w-6 text-gray-500"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                    />
-                                  </svg>
-                                </div>
-                              )}
-                              <span className="text-xs mt-1 text-blue-600">
-                                {message.filename || "File"}
-                              </span>
-                            </div>
-                          ) : (
-                            "No file"
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium">
-                          <button
-                            onClick={() => handleEdit(message)}
-                            className="text-indigo-600 hover:text-indigo-900 mr-3"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(message)}
-                            className="text-red-600 hover:text-red-900 mr-3"
-                          >
-                            Delete
-                          </button>
-                          {message.fileUrl && (
-                            <button
-                              onClick={() => handleDownload(message)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Download
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={isAdmin ? 9 : 7}
-                        className="px-6 py-4 text-center text-sm text-gray-500"
-                      >
-                        No messages found
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? 9 : 7}
+                      className="px-2 sm:px-4 py-2 sm:py-4 text-center text-sm sm:text-base text-gray-500"
+                    >
+                      No messages found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </main>
       </div>
       {editingMessage && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Edit Message</h2>
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <h2 className="text-xl sm:text-2xl font-semibold mb-4">
+              Edit Message
+            </h2>
             <form onSubmit={handleUpdate}>
               {isAdmin && (
                 <div className="mb-4">
@@ -616,7 +620,7 @@ function ActionsPage() {
                   <input
                     id="username"
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                     value={editingMessage.username || ""}
                     onChange={(e) =>
                       setEditingMessage({
@@ -638,7 +642,7 @@ function ActionsPage() {
                   <input
                     id="userId"
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                     value={editingMessage.userId || ""}
                     onChange={(e) =>
                       setEditingMessage({
@@ -659,7 +663,7 @@ function ActionsPage() {
                 <input
                   id="id"
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                   value={editingMessage.id || ""}
                   onChange={(e) =>
                     setEditingMessage({ ...editingMessage, id: e.target.value })
@@ -676,7 +680,7 @@ function ActionsPage() {
                 <input
                   id="senderReceiver"
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                   value={
                     editingMessage[
                       activeTab === "received" ? "sender" : "receiver"
@@ -700,7 +704,7 @@ function ActionsPage() {
                 </label>
                 <textarea
                   id="description"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                   rows="3"
                   value={editingMessage.description || ""}
                   onChange={(e) =>
@@ -721,7 +725,7 @@ function ActionsPage() {
                 <input
                   id="timestamp"
                   type="datetime-local"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                   value={
                     editingMessage.timestamp || editingMessage.createdAt
                       ? new Date(
@@ -749,7 +753,7 @@ function ActionsPage() {
                 <input
                   id="channel"
                   type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                   value={editingMessage.channel || ""}
                   onChange={(e) =>
                     setEditingMessage({
@@ -768,7 +772,9 @@ function ActionsPage() {
                 </label>
                 {editingMessage.fileUrl && (
                   <div className="mb-2">
-                    <p>Current File: {editingMessage.filename}</p>
+                    <p className="text-sm sm:text-base">
+                      Current File: {editingMessage.filename}
+                    </p>
                     {editingMessage.fileFormat &&
                       editingMessage.fileFormat
                         .toLowerCase()
@@ -785,14 +791,14 @@ function ActionsPage() {
                   id="file"
                   type="file"
                   accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm sm:text-base"
                   onChange={(e) => setFile(e.target.files[0])}
                 />
               </div>
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm sm:text-base font-medium text-gray-700 hover:bg-gray-50"
                   onClick={() => {
                     setEditingMessage(null);
                     setFile(null);
@@ -802,7 +808,7 @@ function ActionsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm sm:text-base font-medium text-white hover:bg-blue-700"
                 >
                   Save Changes
                 </button>

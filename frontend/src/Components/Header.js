@@ -23,19 +23,22 @@ const Header = ({ setMainContentMargin }) => {
           const userRef = ref(database, `users/${user.uid}`);
           const snapshot = await get(userRef);
           if (snapshot.exists()) {
-            const userData = (userData = snapshot.val());
+            const userData = snapshot.val(); // Correctly assign snapshot data
+            console.log("Fetched user data:", userData); // Debug log
             setUserName(userData.name || user.email.split("@")[0]);
             setProfilePicture(userData.profilePicture || null);
           } else {
+            console.log("No user data found in database");
             setUserName(user.email.split("@")[0]);
             setProfilePicture(null);
           }
         } catch (error) {
-          console.error("Error fetching user data:", error);
+          console.error("Error fetching user data:", error.code, error.message);
           setUserName(user.email.split("@")[0]);
           setProfilePicture(null);
         }
       } else {
+        console.log("No authenticated user");
         setUserName("User");
         setProfilePicture(null);
       }
@@ -230,7 +233,6 @@ const Header = ({ setMainContentMargin }) => {
                   viewBox="0 0 24 24"
                   xmlns="http://www.w3.org/2000/svg"
                 >
-                  seminal
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"

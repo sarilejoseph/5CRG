@@ -103,7 +103,7 @@ const LandingPage = () => {
             className="text-white text-5xl font-bold mb-4 shadow-text"
             variants={itemVariants}
           >
-            5th Civil Relations Group Armed Forces of the Philippines
+            5th Civil Relations Group CRSAFP
           </motion.p>
 
           <motion.p

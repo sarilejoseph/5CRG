@@ -113,8 +113,8 @@ const Header = ({ setMainContentMargin }) => {
       { label: "Dashboard", path: "/dashboard", icon: "dashboard" },
     ],
     reporting: [
-      { label: "Reports", path: "/reports", icon: "reports" },
       { label: "Actions", path: "/actions", icon: "actions" },
+      { label: "Reports", path: "/reports", icon: "reports" },
       { label: "Activity Logs", path: "/logs", icon: "activityLogs" },
     ],
     administration: [

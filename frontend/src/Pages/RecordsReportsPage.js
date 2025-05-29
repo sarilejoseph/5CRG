@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { getDatabase, ref, onValue, get } from "firebase/database";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "../firebase";
+import jsPDF from "jspdf";
 import crs from "../Assets/crs.png";
 import crg from "../Assets/logo.png";
 
@@ -18,7 +19,6 @@ const MessageHistoryPage = () => {
   const [timeFilter, setTimeFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [uniqueTypes, setUniqueTypes] = useState([]);
   const [activeTab, setActiveTab] = useState("received");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -27,6 +27,8 @@ const MessageHistoryPage = () => {
   const [viewMode, setViewMode] = useState("individual");
   const [allUsersData, setAllUsersData] = useState([]);
   const [error, setError] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewContent, setPreviewContent] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -363,13 +365,36 @@ const MessageHistoryPage = () => {
 
     if (timeFilter !== "all") {
       const today = new Date();
+      const startOfToday = new Date(today.setHours(0, 0, 0, 0));
       const filters = {
         today: (d) =>
-          new Date(d.timestamp).toDateString() === today.toDateString(),
-        week: (d) =>
+          new Date(d.timestamp).toDateString() === startOfToday.toDateString(),
+        thisWeek: (d) =>
           new Date(d.timestamp) >=
           new Date(today.setDate(today.getDate() - today.getDay())),
-        month: (d) =>
+        lastWeek: (d) => {
+          const startOfLastWeek = new Date(
+            today.setDate(today.getDate() - today.getDay() - 7)
+          );
+          const endOfLastWeek = new Date(
+            today.setDate(today.getDate() - today.getDay() + 6)
+          );
+          const timestamp = new Date(d.timestamp);
+          return timestamp >= startOfLastWeek && timestamp <= endOfLastWeek;
+        },
+        twoWeeksAgo: (d) => {
+          const startOfTwoWeeksAgo = new Date(
+            today.setDate(today.getDate() - today.getDay() - 14)
+          );
+          const endOfTwoWeeksAgo = new Date(
+            today.setDate(today.getDate() - today.getDay() - 8)
+          );
+          const timestamp = new Date(d.timestamp);
+          return (
+            timestamp >= startOfTwoWeeksAgo && timestamp <= endOfTwoWeeksAgo
+          );
+        },
+        thisMonth: (d) =>
           new Date(d.timestamp) >=
           new Date(today.getFullYear(), today.getMonth(), 1),
       };
@@ -390,13 +415,36 @@ const MessageHistoryPage = () => {
     let filtered = [...allUsersData];
     if (timeFilter !== "all") {
       const today = new Date();
+      const startOfToday = new Date(today.setHours(0, 0, 0, 0));
       const filters = {
         today: (m) =>
-          new Date(m.timestamp).toDateString() === today.toDateString(),
-        week: (m) =>
+          new Date(m.timestamp).toDateString() === startOfToday.toDateString(),
+        thisWeek: (m) =>
           new Date(m.timestamp) >=
           new Date(today.setDate(today.getDate() - today.getDay())),
-        month: (m) =>
+        lastWeek: (m) => {
+          const startOfLastWeek = new Date(
+            today.setDate(today.getDate() - today.getDay() - 7)
+          );
+          const endOfLastWeek = new Date(
+            today.setDate(today.getDate() - today.getDay() + 6)
+          );
+          const timestamp = new Date(m.timestamp);
+          return timestamp >= startOfLastWeek && timestamp <= endOfLastWeek;
+        },
+        twoWeeksAgo: (m) => {
+          const startOfTwoWeeksAgo = new Date(
+            today.setDate(today.getDate() - today.getDay() - 14)
+          );
+          const endOfTwoWeeksAgo = new Date(
+            today.setDate(today.getDate() - today.getDay() - 8)
+          );
+          const timestamp = new Date(m.timestamp);
+          return (
+            timestamp >= startOfTwoWeeksAgo && timestamp <= endOfTwoWeeksAgo
+          );
+        },
+        thisMonth: (m) =>
           new Date(m.timestamp) >=
           new Date(today.getFullYear(), today.getMonth(), 1),
       };
@@ -411,6 +459,359 @@ const MessageHistoryPage = () => {
 
   const formatTimestamp = (timestamp) => new Date(timestamp).toLocaleString();
 
+  const generatePDFContent = (section) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    let y = 10;
+
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(171, 172, 173);
+    doc.text(
+      "AFP Vision 2028: A World-Class Armed Forces, Source of National Pride",
+      pageWidth / 2,
+      y,
+      { align: "center" }
+    );
+    y += 6;
+
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("HEADQUARTERS", pageWidth / 2, y, { align: "center" });
+    y += 8;
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("5th CIVIL RELATIONS GROUP", pageWidth / 2, y, {
+      align: "center",
+    });
+    y += 6;
+
+    doc.text("CIVIL RELATIONS SERVICE AFP", pageWidth / 2, y, {
+      align: "center",
+    });
+    y += 6;
+
+    doc.setFontSize(12);
+    doc.setTextColor(108, 117, 125);
+    doc.text(
+      "Naval Station Felix Apolinario, Panacan, Davao City",
+      pageWidth / 2,
+      y,
+      { align: "center" }
+    );
+    y += 6;
+
+    doc.setFontSize(10);
+    doc.text(
+      "crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433",
+      pageWidth / 2,
+      y,
+      { align: "center" }
+    );
+    y += 6;
+
+    doc.setLineWidth(0.3);
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    doc.setFontSize(18);
+    doc.setTextColor(30, 64, 175);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      section === "receivedMessagesTable"
+        ? "Received Messages History"
+        : section === "sentMessagesTable"
+        ? "Sent Messages History"
+        : "All Users Messages History",
+      margin,
+      y
+    );
+    y += 8;
+
+    doc.setFontSize(12);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, margin, y);
+    y += 6;
+
+    doc.text(
+      `Time Filter: ${
+        timeFilter === "today"
+          ? "Today"
+          : timeFilter === "thisWeek"
+          ? "This Week"
+          : timeFilter === "lastWeek"
+          ? "Last Week"
+          : timeFilter === "twoWeeksAgo"
+          ? "Two Weeks Ago"
+          : timeFilter === "thisMonth"
+          ? "This Month"
+          : "All Time"
+      }`,
+      margin,
+      y
+    );
+    y += 6;
+
+    doc.text(
+      `Type Filter: ${typeFilter === "all" ? "All Types" : typeFilter}`,
+      margin,
+      y
+    );
+    y += 6;
+
+    if (viewMode === "all") {
+      doc.text("Aggregated data for all users", margin, y);
+      y += 6;
+    }
+
+    let columns, columnWidths, messages;
+    if (section === "receivedMessagesTable") {
+      columns = [
+        "From",
+        "Type",
+        "ID",
+        "Subject",
+        "Date Sent",
+        "Date Received",
+        "Channel",
+        "Format",
+        "Attachment",
+      ];
+      columnWidths = [22, 18, 18, 28, 23, 23, 18, 18, 22];
+      messages = filteredReceivedMessages;
+    } else if (section === "sentMessagesTable") {
+      columns = [
+        "To",
+        "Type",
+        "ID",
+        "Subject",
+        "Date Sent",
+        "Channel",
+        "Format",
+        "Attachment",
+      ];
+      columnWidths = [27, 18, 18, 28, 23, 18, 18, 22];
+      messages = filteredSentMessages;
+    } else {
+      columns = [
+        "User",
+        "Direction",
+        activeTab === "received" ? "From" : "To",
+        "Type",
+        "Subject",
+        "Date",
+        "Attachment",
+      ];
+      columnWidths = [30, 20, 30, 20, 30, 25, 27];
+      messages = filterAllUsersData();
+    }
+
+    const startX = margin;
+    const baseRowHeight = 8;
+    const fontSize = 8;
+    const lineHeight = 4;
+    const maxLinesPerCell = 3;
+
+    doc.setFontSize(fontSize);
+    doc.setFillColor(59, 130, 246);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    let x = startX;
+    columns.forEach((col, index) => {
+      doc.rect(x, y, columnWidths[index], baseRowHeight, "F");
+      try {
+        const headerLines = doc.splitTextToSize(
+          col.toUpperCase(),
+          columnWidths[index] - 4
+        );
+        headerLines.slice(0, maxLinesPerCell).forEach((line, i) => {
+          doc.text(line, x + 2, y + 4 + i * lineHeight);
+        });
+      } catch (error) {
+        console.error(`Error rendering header ${col}:`, error);
+        doc.text(col.toUpperCase().substring(0, 10), x + 2, y + 4);
+      }
+      x += columnWidths[index];
+    });
+    y += baseRowHeight;
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "normal");
+    messages.forEach((message, index) => {
+      x = startX;
+      const rowData =
+        section === "receivedMessagesTable"
+          ? [
+              message.sender || message.staffName || "System",
+              message.communicationType || message.type || "Unknown",
+              message.documentId || message.id || "-",
+              message.subject || message.description || "-",
+              formatTimestamp(message.dateSent || message.timestamp),
+              formatTimestamp(message.dateReceived || message.timestamp),
+              message.channel || "Unknown",
+              message.fileFormat || "Unknown",
+              message.fileUrl ? "File Attached" : "-",
+            ]
+          : section === "sentMessagesTable"
+          ? [
+              message.receiver || "-",
+              message.communicationType || message.type || "Unknown",
+              message.documentId || message.id || "-",
+              message.subject || message.description || "-",
+              formatTimestamp(message.dateSent || message.timestamp),
+              message.channel || "Unknown",
+              message.fileFormat || "Unknown",
+              message.fileUrl ? "File Attached" : "-",
+            ]
+          : [
+              message.userName || "-",
+              message.messageType || "-",
+              message.messageType === "received"
+                ? message.sender || "System"
+                : message.receiver || "-",
+              message.type || "Unknown",
+              message.subject || "-",
+              formatTimestamp(message.timestamp),
+              message.fileUrl ? "File Attached" : "-",
+            ];
+
+      let maxLines = 1;
+      const wrappedTexts = rowData.map((cell, i) => {
+        try {
+          const text = cell.length > 20 ? cell.substring(0, 17) + "..." : cell;
+          const lines = doc.splitTextToSize(text, columnWidths[i] - 4);
+          maxLines = Math.max(
+            maxLines,
+            Math.min(lines.length, maxLinesPerCell)
+          );
+          return lines.slice(0, maxLinesPerCell);
+        } catch (error) {
+          console.error(`Error wrapping text for cell ${i}:`, error);
+          return [cell.substring(0, 10)];
+        }
+      });
+      const rowHeight = maxLines * lineHeight;
+
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(startX, y, pageWidth - 2 * margin, rowHeight, "F");
+      }
+
+      wrappedTexts.forEach((lines, i) => {
+        lines.forEach((line, j) => {
+          doc.text(line, x + 2, y + 4 + j * lineHeight);
+        });
+        x += columnWidths[i];
+      });
+
+      x = startX;
+      rowData.forEach((_, i) => {
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(x, y, columnWidths[i], rowHeight);
+        x += columnWidths[i];
+      });
+
+      y += rowHeight;
+
+      if (y > doc.internal.pageSize.getHeight() - 30) {
+        doc.addPage();
+        y = 10;
+        y += 5;
+        doc.setFontSize(12);
+        doc.setTextColor(171, 172, 173);
+        doc.text(
+          "AFP Vision 2028: A World-Class Armed Forces, Source of National Pride",
+          pageWidth / 2,
+          y,
+          { align: "center" }
+        );
+        y += 6;
+        doc.setFontSize(20);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        doc.text("HEADQUARTERS", pageWidth / 2, y, { align: "center" });
+        y += 8;
+        doc.setFontSize(16);
+        doc.text("5th CIVIL RELATIONS GROUP", pageWidth / 2, y, {
+          align: "center",
+        });
+        y += 6;
+        doc.text("CIVIL RELATIONS SERVICE AFP", pageWidth / 2, y, {
+          align: "center",
+        });
+        y += 6;
+        doc.setFontSize(12);
+        doc.setTextColor(108, 117, 125);
+        doc.text(
+          "Naval Station Felix Apolinario, Panacan, Davao City",
+          pageWidth / 2,
+          y,
+          { align: "center" }
+        );
+        y += 6;
+        doc.setFontSize(10);
+        doc.text(
+          "crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433",
+          pageWidth / 2,
+          y,
+          { align: "center" }
+        );
+        y += 6;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 10;
+
+        x = startX;
+        doc.setFontSize(fontSize);
+        doc.setFillColor(59, 130, 246);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        columns.forEach((col, index) => {
+          doc.rect(x, y, columnWidths[index], baseRowHeight, "F");
+          try {
+            const headerLines = doc.splitTextToSize(
+              col.toUpperCase(),
+              columnWidths[index] - 4
+            );
+            headerLines.slice(0, maxLinesPerCell).forEach((line, i) => {
+              doc.text(line, x + 2, y + 4 + i * lineHeight);
+            });
+          } catch (error) {
+            console.error(`Error rendering header ${col} on new page:`, error);
+            doc.text(col.toUpperCase().substring(0, 10), x + 2, y + 4);
+          }
+          x += columnWidths[index];
+        });
+        y += baseRowHeight;
+        doc.setTextColor(30, 41, 59);
+        doc.setFont("helvetica", "normal");
+      }
+    });
+
+    y += 10;
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    doc.setFontSize(10);
+    doc.setTextColor(108, 117, 125);
+    doc.text(
+      `Generated by: User ID - ${user?.uid || "Unknown"}${
+        user?.email ? ` | Email - ${user?.email}` : ""
+      }`,
+      pageWidth / 2,
+      y,
+      { align: "center" }
+    );
+
+    return doc;
+  };
+
   const handlePrint = (section) => {
     const printContent = document.getElementById(section);
     if (!printContent) {
@@ -419,26 +820,21 @@ const MessageHistoryPage = () => {
       return;
     }
 
-    // Preload images to ensure they are available
     const preloadImages = (urls) => {
       const promises = urls.map((url) => {
         return new Promise((resolve) => {
           const img = new Image();
           img.src = url;
-          img.onload = () => {
-            console.log(`Image loaded: ${url}`);
-            resolve(url);
-          };
+          img.onload = () => resolve(url);
           img.onerror = () => {
             console.warn(`Failed to load image: ${url}`);
-            resolve(url); // Continue even if image fails
+            resolve(url);
           };
         });
       });
       return Promise.all(promises);
     };
 
-    // Collect image URLs (header logos and attachment images)
     const imageUrls = [crs, crg];
     const messages =
       section === "receivedMessagesTable"
@@ -452,7 +848,6 @@ const MessageHistoryPage = () => {
       }
     });
 
-    // Open print window
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       console.error("Failed to open print window. Check pop-up blocker.");
@@ -460,7 +855,6 @@ const MessageHistoryPage = () => {
       return;
     }
 
-    // Write content after preloading images
     preloadImages(imageUrls)
       .then(() => {
         printWindow.document.write(`
@@ -632,13 +1026,11 @@ const MessageHistoryPage = () => {
         }</p>
               </div>
               <script>
-                // Fallback for Chrome: Trigger print after 1s if onload fails
                 setTimeout(() => {
                   if (document.readyState === 'complete') {
                     window.print();
                   }
                 }, 1000);
-                // Close window after print dialog
                 window.onafterprint = () => {
                   window.close();
                 };
@@ -647,150 +1039,42 @@ const MessageHistoryPage = () => {
           </html>
         `);
         printWindow.document.close();
-        console.log(`Print window opened for section: ${section}`);
       })
       .catch((error) => {
         console.error("Error preloading images:", error);
         printWindow.close();
         alert("Failed to load report content. Please try again.");
       });
-    setShowExportDropdown(false);
   };
 
   const handleDownloadPDF = (section) => {
-    const printContent = document.getElementById(section);
-    if (!printContent) {
-      console.error(`PDF content element with ID "${section}" not found`);
-      alert("Error: Could not find report content to download.");
-      return;
+    try {
+      const doc = generatePDFContent(section);
+      doc.save(
+        `${
+          section === "receivedMessagesTable"
+            ? "Received_Messages"
+            : section === "sentMessagesTable"
+            ? "Sent_Messages"
+            : "All_Users_Messages"
+        }_${new Date().toISOString().split("T")[0]}.pdf`
+      );
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Check console for details.");
     }
+  };
 
-    // Preload images to ensure they are available
-    const preloadImages = (urls) => {
-      const promises = urls.map((url) => {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.src = url;
-          img.onload = () => {
-            console.log(`Image loaded for PDF: ${url}`);
-            resolve(url);
-          };
-          img.onerror = () => {
-            console.warn(`Failed to load image for PDF: ${url}`);
-            resolve(url); // Continue even if image fails
-          };
-        });
-      });
-      return Promise.all(promises);
-    };
-
-    // Collect image URLs
-    const imageUrls = [crs, crg];
-    const messages =
-      section === "receivedMessagesTable"
-        ? filteredReceivedMessages
-        : section === "sentMessagesTable"
-        ? filteredSentMessages
-        : filterAllUsersData();
-    messages.forEach((message) => {
-      if (message.fileUrl && message.fileFormat?.match(/png|jpg|jpeg/i)) {
-        imageUrls.push(message.fileUrl);
-      }
-    });
-
-    // Create a temporary container for PDF content
-    const tempContainer = document.createElement("div");
-    tempContainer.style.position = "absolute";
-    tempContainer.style.left = "-9999px";
-    tempContainer.innerHTML = `
-      <div style="font-family: Arial, Helvetica, sans-serif; color: #1e293b; line-height: 1.6; margin: 20px; font-size: 14px;">
-        <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; position: relative;">
-          <img src="${crs}" alt="AFP Logo" style="position: absolute; top: 10px; left: 0; width: 50px; height: 50px;" onerror="this.style.display='none'">
-          <div style="color: rgb(171, 172, 173); font-size: 12px; margin-bottom: 4px;">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
-          <div style="font-size: 20px; font-weight: 700; color: rgb(0, 0, 0); margin: 8px 0; letter-spacing: 0.5px;">HEADQUARTERS</div>
-          <div style="font-size: 16px; font-weight: 600; color: rgb(0, 0, 0); margin: 4px 0;">5<sup>th</sup> CIVIL RELATIONS GROUP</div>
-          <div style="font-size: 16px; font-weight: 600; color: rgb(0, 0, 0); margin: 4px 0;">CIVIL RELATIONS SERVICE AFP</div>
-          <div style="font-size: 12px; color: #6c757d; margin: 4px 0;">Naval Station Felix Apolinario, Panacan, Davao City</div>
-          <div style="font-size: 10px; color: #6c757d;">crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433</div>
-          <img src="${crg}" alt="Civil Relations Service Logo" style="position: absolute; top: 10px; right: 0; width: 50px; height: 50px;" onerror="this.style.display='none'">
-        </div>
-        <div style="margin-bottom: 15px;">
-          <h1 style="color: #1e40af; font-weight: 700; margin-bottom: 8px; font-size: 18px;">${
-            section === "receivedMessagesTable"
-              ? "Received Messages History"
-              : section === "sentMessagesTable"
-              ? "Sent Messages History"
-              : "All Users Messages History"
-          }</h1>
-          <p style="color: #64748b; font-size: 12px;">Generated on: ${new Date().toLocaleString()}</p>
-          ${
-            viewMode === "all"
-              ? '<p style="color: #64748b; font-size: 12px;">Aggregated data for all users</p>'
-              : ""
-          }
-        </div>
-        ${printContent.outerHTML.replace(
-          /<a[^>]*>View File<\/a>/g,
-          "File Attached"
-        )}
-        <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 10px; color: #6c757d;">
-          <p>Generated by: User ID - ${user?.uid || "Unknown"}${
-      user?.email ? ` | Email - ${user?.email}` : ""
-    }</p>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(tempContainer);
-
-    // Preload images before generating PDF
-    preloadImages(imageUrls)
-      .then(() => {
-        // Load html2pdf.js via CDN and generate PDF
-        const script = document.createElement("script");
-        script.src =
-          "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-        script.onload = () => {
-          window
-            .html2pdf()
-            .set({
-              margin: 10,
-              filename: `${
-                section === "receivedMessagesTable"
-                  ? "Received_Messages"
-                  : section === "sentMessagesTable"
-                  ? "Sent_Messages"
-                  : "All_Users_Messages"
-              }_${new Date().toISOString().split("T")[0]}.pdf`,
-              image: { type: "jpeg", quality: 0.95 },
-              html2canvas: { scale: 2, useCORS: true },
-              jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-            })
-            .from(tempContainer)
-            .save()
-            .then(() => {
-              document.body.removeChild(tempContainer);
-              setShowExportDropdown(false);
-            })
-            .catch((error) => {
-              console.error("Error generating PDF:", error);
-              alert("Failed to generate PDF. Please try again.");
-              document.body.removeChild(tempContainer);
-            });
-        };
-        script.onerror = () => {
-          console.error("Failed to load html2pdf.js");
-          alert(
-            "Failed to load PDF library. Please check your internet connection."
-          );
-          document.body.removeChild(tempContainer);
-        };
-        document.head.appendChild(script);
-      })
-      .catch((error) => {
-        console.error("Error preloading images for PDF:", error);
-        alert("Failed to load images for PDF. Please try again.");
-        document.body.removeChild(tempContainer);
-      });
+  const handlePreviewPDF = (section) => {
+    try {
+      const doc = generatePDFContent(section);
+      const pdfDataUri = doc.output("datauristring");
+      setPreviewContent(pdfDataUri);
+      setShowPreview(true);
+    } catch (error) {
+      console.error("Error generating PDF preview:", error);
+      alert("Failed to generate PDF preview. Check console for details.");
+    }
   };
 
   const toggleViewMode = (mode) => {
@@ -824,20 +1108,20 @@ const MessageHistoryPage = () => {
                 </p>
                 <div className="inline-flex rounded-lg overflow-hidden">
                   <button
-                    className={`px-4 py-2 text-sm sm:text-base ${
+                    className={`px-4 py-2 text-sm sm:text-base font-medium transition-colors duration-200 ${
                       viewMode === "individual"
                         ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-700"
+                        : "bg-white text-gray-700 hover:bg-gray-100"
                     } rounded-l-lg border border-gray-300`}
                     onClick={() => toggleViewMode("individual")}
                   >
                     Individual
                   </button>
                   <button
-                    className={`px-4 py-2 text-sm sm:text-base ${
+                    className={`px-4 py-2 text-sm sm:text-base font-medium transition-colors duration-200 ${
                       viewMode === "all"
                         ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-700"
+                        : "bg-white text-gray-700 hover:bg-gray-100"
                     } rounded-r-lg border border-gray-300`}
                     onClick={() => toggleViewMode("all")}
                   >
@@ -852,7 +1136,7 @@ const MessageHistoryPage = () => {
                     setSelectedUser(e.target.value);
                     fetchMessages(e.target.value);
                   }}
-                  className="w-full sm:w-auto p-2 border rounded-lg text-sm sm:text-base"
+                  className="w-full sm:w-auto p-2 border rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-indigo-500"
                 >
                   {allUsers.map((user) => (
                     <option key={user.uid} value={user.uid}>
@@ -869,7 +1153,7 @@ const MessageHistoryPage = () => {
           <div className="p-4 sm:p-6">
             <nav className="flex flex-wrap gap-4 sm:gap-6 border-b">
               <button
-                className={`pb-2 text-sm sm:text-base ${
+                className={`pb-2 text-sm sm:text-base font-medium transition-colors duration-200 ${
                   activeTab === "received"
                     ? "text-indigo-600 border-b-2 border-indigo-600"
                     : "text-gray-500 hover:text-indigo-600"
@@ -879,7 +1163,7 @@ const MessageHistoryPage = () => {
                 Incoming
               </button>
               <button
-                className={`pb-2 text-sm sm:text-base ${
+                className={`pb-2 text-sm sm:text-base font-medium transition-colors duration-200 ${
                   activeTab === "sent"
                     ? "text-indigo-600 border-b-2 border-indigo-600"
                     : "text-gray-500 hover:text-indigo-600"
@@ -892,29 +1176,45 @@ const MessageHistoryPage = () => {
 
             <div className="flex flex-col sm:flex-row justify-between py-4 gap-4">
               <select
-                className="p-2 border rounded-lg text-sm sm:text-base w-full sm:w-auto"
+                className="p-2 border rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-indigo-500 w-full sm:w-auto"
                 value={timeFilter}
                 onChange={(e) => setTimeFilter(e.target.value)}
               >
-                <option value="all">All Time</option>
                 <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
+                <option value="thisWeek">This Week</option>
+                <option value="lastWeek">Last Week</option>
+                <option value="twoWeeksAgo">Two Weeks Ago</option>
+                <option value="thisMonth">This Month</option>
+                <option value="all">All Time</option>
               </select>
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
                 <div className="relative">
                   <button
-                    className="flex px-4 py-2 border rounded-lg text-sm sm:text-base w-full sm:w-auto"
+                    className="flex items-center px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm sm:text-base font-medium hover:bg-gray-100 transition-colors duration-200 w-full sm:w-auto"
                     onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                   >
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v3.172a1 1 0 01-.293.707l-2 2A1 1 0 0110 20v-3.172a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z"
+                      />
+                    </svg>
                     Filter
                   </button>
                   {showFilterDropdown && (
                     <div className="absolute right-0 mt-2 w-48 sm:w-64 bg-white rounded-lg shadow-lg z-10">
                       <button
-                        className={`w-full text-left p-2 text-sm sm:text-base ${
+                        className={`w-full text-left p-2 text-sm sm:text-base font-medium ${
                           typeFilter === "all"
-                            ? "text-indigo-600"
+                            ? "text-indigo-600 bg-gray-100"
                             : "text-gray-700 hover:bg-gray-100"
                         }`}
                         onClick={() => {
@@ -927,9 +1227,9 @@ const MessageHistoryPage = () => {
                       {uniqueTypes.map((type) => (
                         <button
                           key={type}
-                          className={`w-full text-left p-2 text-sm sm:text-base ${
+                          className={`w-full text-left p-2 text-sm sm:text-base font-medium ${
                             typeFilter === type
-                              ? "text-indigo-600"
+                              ? "text-indigo-600 bg-gray-100"
                               : "text-gray-700 hover:bg-gray-100"
                           }`}
                           onClick={() => {
@@ -943,55 +1243,128 @@ const MessageHistoryPage = () => {
                     </div>
                   )}
                 </div>
+                <button
+                  className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-indigo-700 transition-colors duration-200 w-full sm:w-auto"
+                  onClick={() =>
+                    handlePrint(
+                      viewMode === "all"
+                        ? "allUsersMessagesTable"
+                        : `${activeTab}MessagesTable`
+                    )
+                  }
+                >
+                  <svg
+                    className="w-4 h-4 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                    />
+                  </svg>
+                  Print
+                </button>
                 <div className="relative">
                   <button
-                    className="flex px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm sm:text-base w-full sm:w-auto"
-                    onClick={() => setShowExportDropdown(!showExportDropdown)}
+                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-indigo-700 transition-colors duration-200 w-full sm:w-auto"
+                    onClick={() =>
+                      handlePreviewPDF(
+                        viewMode === "all"
+                          ? "allUsersMessagesTable"
+                          : `${activeTab}MessagesTable`
+                      )
+                    }
                   >
-                    Export
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    Download PDF
                   </button>
-                  {showExportDropdown && (
-                    <div className="absolute right-0 mt-2 w-48 sm:w-64 bg-white rounded-lg shadow-lg z-10">
-                      <button
-                        className="w-full text-left p-2 text-sm sm:text-base text-gray-700 hover:bg-gray-100"
-                        onClick={() =>
-                          handlePrint(
-                            viewMode === "all"
-                              ? "allUsersMessagesTable"
-                              : `${activeTab}MessagesTable`
-                          )
-                        }
-                      >
-                        Print{" "}
-                        {viewMode === "all"
-                          ? "All Users"
-                          : activeTab === "received"
-                          ? "Received"
-                          : "Sent"}
-                      </button>
-                      <button
-                        className="w-full text-left p-2 text-sm sm:text-base text-gray-700 hover:bg-gray-100"
-                        onClick={() =>
-                          handleDownloadPDF(
-                            viewMode === "all"
-                              ? "allUsersMessagesTable"
-                              : `${activeTab}MessagesTable`
-                          )
-                        }
-                      >
-                        Download PDF{" "}
-                        {viewMode === "all"
-                          ? "All Users"
-                          : activeTab === "received"
-                          ? "Received"
-                          : "Sent"}
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
           </div>
+
+          {showPreview && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-4xl h-[80vh] flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg sm:text-xl font-semibold">
+                    PDF Preview
+                  </h2>
+                  <div className="flex space-x-2">
+                    <button
+                      className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-indigo-700 transition-colors duration-200"
+                      onClick={() =>
+                        handleDownloadPDF(
+                          viewMode === "all"
+                            ? "allUsersMessagesTable"
+                            : `${activeTab}MessagesTable`
+                        )
+                      }
+                    >
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                        />
+                      </svg>
+                      Download
+                    </button>
+                    <button
+                      className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm sm:text-base font-medium hover:bg-gray-300 transition-colors duration-200"
+                      onClick={() => setShowPreview(false)}
+                    >
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <iframe
+                  src={previewContent}
+                  className="w-full h-full rounded-lg"
+                  title="PDF Preview"
+                />
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex justify-center py-16 sm:py-32">

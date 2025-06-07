@@ -465,6 +465,20 @@ const MessageHistoryPage = () => {
     const margin = 14;
     let y = 10;
 
+    // Adding left logo (crs.png)
+    try {
+      doc.addImage(crs, "PNG", margin, 5, 15, 15);
+    } catch (error) {
+      console.error("Error adding left logo:", error);
+    }
+
+    // Adding right logo (crg.png)
+    try {
+      doc.addImage(crg, "PNG", pageWidth - margin - 15, 5, 15, 15);
+    } catch (error) {
+      console.error("Error adding right logo:", error);
+    }
+
     y += 5;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
@@ -1065,12 +1079,17 @@ const MessageHistoryPage = () => {
     }
   };
 
-  const handlePreviewPDF = (section) => {
+  const handlePreviewPDF = async () => {
     try {
-      const doc = generatePDFContent(section);
-      const pdfDataUri = doc.output("datauristring");
-      setPreviewContent(pdfDataUri);
+      const doc = await generatePDFContent();
+      const pdfBlob = doc.output("blob");
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      setPreviewContent(pdfUrl);
       setShowPreview(true);
+      // Clean up the URL after the preview is closed
+      setTimeout(() => {
+        URL.revokeObjectURL(pdfUrl);
+      }, 1000);
     } catch (error) {
       console.error("Error generating PDF preview:", error);
       alert("Failed to generate PDF preview. Check console for details.");

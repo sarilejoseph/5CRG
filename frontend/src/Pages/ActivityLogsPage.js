@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { getDatabase, ref, onValue } from "firebase/database";
+import { getDatabase, ref, onValue, remove, get } from "firebase/database";
 import { auth } from "../firebase";
 import jsPDF from "jspdf";
+import crs from "../Assets/crs.png";
+import crg from "../Assets/logo.png";
 
 const database = getDatabase();
 
@@ -19,6 +21,7 @@ function ActivityLogsPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewContent, setPreviewContent] = useState("");
   const [viewMode, setViewMode] = useState("all");
+  const [selectedLogs, setSelectedLogs] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -165,6 +168,84 @@ function ActivityLogsPage() {
     fetchLogs();
   }, [user, isAdmin, fetchUsernames, fetchLogs]);
 
+  const handleClearSelected = async () => {
+    if (selectedLogs.length === 0) {
+      setErrorMessage("No logs selected for deletion.");
+      return;
+    }
+
+    try {
+      for (const log of selectedLogs) {
+        if (!isAdmin && log.userId !== user.uid) {
+          setErrorMessage("You can only delete your own logs.");
+          return;
+        }
+        const logRef = ref(
+          database,
+          `users/${log.userId}/activityLogs/${log.key}`
+        );
+        await remove(logRef);
+      }
+      setSelectedLogs([]);
+      setErrorMessage("Selected logs cleared successfully.");
+      fetchLogs();
+    } catch (error) {
+      console.error("Error clearing logs:", error);
+      setErrorMessage("Failed to clear logs. Please try again.");
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (
+      !window.confirm(
+        "Are you sure you want to clear all logs? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      if (isAdmin && viewMode === "all") {
+        // Admin clearing all users' logs
+        const usersRef = ref(database, `users`);
+        const snapshot = await get(usersRef);
+        const usersData = snapshot.val();
+        if (usersData) {
+          for (const userId of Object.keys(usersData)) {
+            const logsRef = ref(database, `users/${userId}/activityLogs`);
+            await remove(logsRef);
+          }
+        }
+      } else {
+        // User or admin in individual mode
+        const targetUserId =
+          isAdmin && viewMode === "individual" && selectedUser
+            ? selectedUser
+            : user.uid;
+        if (!isAdmin && targetUserId !== user.uid) {
+          setErrorMessage("You can only clear your own logs.");
+          return;
+        }
+        const logsRef = ref(database, `users/${targetUserId}/activityLogs`);
+        await remove(logsRef);
+      }
+      setSelectedLogs([]);
+      setErrorMessage("All logs cleared successfully.");
+      fetchLogs();
+    } catch (error) {
+      console.error("Error clearing all logs:", error);
+      setErrorMessage("Failed to clear all logs. Please try again.");
+    }
+  };
+
+  const toggleLogSelection = (log) => {
+    setSelectedLogs((prev) =>
+      prev.some((l) => l.key === log.key && l.userId === log.userId)
+        ? prev.filter((l) => !(l.key === log.key && l.userId === log.userId))
+        : [...prev, log]
+    );
+  };
+
   const filterLogsByTime = (logs) => {
     const now = new Date();
     return logs.filter((log) => {
@@ -226,6 +307,20 @@ function ActivityLogsPage() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 14;
     let y = 10;
+
+    // Adding left logo (crs.png)
+    try {
+      doc.addImage(crs, "PNG", margin, 5, 15, 15);
+    } catch (error) {
+      console.error("Error adding left logo:", error);
+    }
+
+    // Adding right logo (crg.png)
+    try {
+      doc.addImage(crg, "PNG", pageWidth - margin - 15, 5, 15, 15);
+    } catch (error) {
+      console.error("Error adding right logo:", error);
+    }
 
     y += 5;
     doc.setFont("helvetica", "normal");
@@ -419,6 +514,21 @@ function ActivityLogsPage() {
       if (y > doc.internal.pageSize.getHeight() - 30) {
         doc.addPage();
         y = 10;
+
+        // Adding left logo on new page
+        try {
+          doc.addImage(crs, "PNG", margin, 5, 15, 15);
+        } catch (error) {
+          console.error("Error adding left logo on new page:", error);
+        }
+
+        // Adding right logo on new page
+        try {
+          doc.addImage(crg, "PNG", pageWidth - margin - 15, 5, 15, 15);
+        } catch (error) {
+          console.error("Error adding right logo on new page:", error);
+        }
+
         y += 5;
         doc.setFontSize(12);
         doc.setTextColor(171, 172, 173);
@@ -677,14 +787,14 @@ function ActivityLogsPage() {
         </head>
         <body>
           <div class="official-header">
-            <img src="https://via.placeholder.com/50" alt="AFP Logo" class="logo-left" onerror="this.style.display='none'" />
-            <div class="vision-text">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
-            <div class="main-title">HEADQUARTERS</div>
-            <div class="subtitle">5th CIVIL RELATIONS GROUP</div>
-            <div class="subtitle">CIVIL RELATIONS SERVICE AFP</div>
-            <div class="address-text">Naval Station Felix Apolinario, Panacan, Davao City</div>
-            <div class="contact-text">crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433</div>
-            <img src="https://via.placeholder.com/50" alt="Civil Relations Service Logo" class="logo-right" onerror="this.style.display='none'" />
+           <img src="${crs}" alt="AFP Logo" class="logo-left" onerror="this.style.display='none'">
+                          <div class="vision-text">AFP Vision 2028: A World-Class Armed Forces, Source of National Pride</div>
+                          <div class="main-title">HEADQUARTERS</div>
+                          <div class="subtitle">5<sup>th</sup> CIVIL RELATIONS GROUP</div>
+                          <div class="subtitle">CIVIL RELATIONS SERVICE AFP</div>
+                          <div class="address-text">Naval Station Felix Apolinario, Panacan, Davao City</div>
+                          <div class="contact-text">crscrs@gmail.com LAN: 8888 Cel No: 0917-153-7433</div>
+                          <img src="${crg}" alt="Civil Relations Service Logo" class="logo-right" onerror="this.style.display='none'">
           </div>
           <div class="content-header">
             <h1>Activity Logs Report</h1>
@@ -751,12 +861,17 @@ function ActivityLogsPage() {
     }
   };
 
-  const handlePreviewPDF = () => {
+  const handlePreviewPDF = async () => {
     try {
-      const doc = generatePDFContent();
-      const pdfDataUri = doc.output("datauristring");
-      setPreviewContent(pdfDataUri);
+      const doc = await generatePDFContent();
+      const pdfBlob = doc.output("blob");
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      setPreviewContent(pdfUrl);
       setShowPreview(true);
+      // Clean up the URL after the preview is closed
+      setTimeout(() => {
+        URL.revokeObjectURL(pdfUrl);
+      }, 1000);
     } catch (error) {
       console.error("Error generating PDF preview:", error);
       alert("Failed to generate PDF preview. Check console for details.");
@@ -791,9 +906,8 @@ function ActivityLogsPage() {
           Activity Logs
         </h1>
 
-        {/* Header Card */}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between space-y-2 sm:space-y-0">
+          <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
             <div className="flex flex-col items-start space-y-2">
               <p className="text-sm sm:text-base text-gray-500">
                 Search by log ID, action, or description
@@ -868,10 +982,8 @@ function ActivityLogsPage() {
           </div>
         </div>
 
-        {/* Data Card */}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
-            {/* Date Filter (Top Left) */}
             <div className="w-full sm:w-64 mb-4 sm:mb-0">
               <select
                 className="w-full px-3 py-2 border rounded-lg text-sm sm:text-base focus:ring-2 focus:ring-indigo-500"
@@ -885,51 +997,93 @@ function ActivityLogsPage() {
               </select>
             </div>
 
-            {/* Controls (Top Right) */}
-            {isAdmin && (
-              <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                <button
-                  className="flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-semibold tracking-wide hover:bg-indigo-700 transition-colors duration-200 shadow-sm"
-                  onClick={handlePrint}
-                >
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              {isAdmin && (
+                <>
+                  <button
+                    className="flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-semibold tracking-wide hover:bg-indigo-700 transition-colors duration-200 shadow-sm"
+                    onClick={handlePrint}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 0 00-2 2v4h10z"
-                    />
-                  </svg>
-                  Print
-                </button>
-                <button
-                  className="flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-semibold tracking-wide hover:bg-indigo-700 transition-colors duration-200 shadow-sm"
-                  onClick={handlePreviewPDF}
-                >
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
+                    <svg
+                      className="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 0 00-2 2v4h10z"
+                      />
+                    </svg>
+                    Print
+                  </button>
+                  <button
+                    className="flex items-center justify-center px-6 py-3 bg-indigo-600 text-white rounded-lg text-sm sm:text-base font-semibold tracking-wide hover:bg-indigo-700 transition-colors duration-200 shadow-sm"
+                    onClick={handlePreviewPDF}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                    />
-                  </svg>
-                  Download PDF
-                </button>
-              </div>
-            )}
+                    <svg
+                      className="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                    Download PDF
+                  </button>
+                </>
+              )}
+              <button
+                className="flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg text-sm sm:text-base font-semibold tracking-wide hover:bg-red-700 transition-colors duration-200 shadow-sm"
+                onClick={handleClearSelected}
+                disabled={selectedLogs.length === 0}
+              >
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-6a1 1 0 00-1 1v3H5"
+                  />
+                </svg>
+                Clear Selected
+              </button>
+              <button
+                className="flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg text-sm sm:text-base font-semibold tracking-wide hover:bg-red-700 transition-colors duration-200 shadow-sm"
+                onClick={handleClearAll}
+              >
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-6a1 1 0 00-1 1v3H5"
+                  />
+                </svg>
+                Clear All
+              </button>
+            </div>
           </div>
 
           {showPreview && (
@@ -1007,6 +1161,9 @@ function ActivityLogsPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
+                    Select
+                  </th>
+                  <th className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wider">
                     Log ID
                   </th>
                   {isAdmin && (
@@ -1037,6 +1194,16 @@ function ActivityLogsPage() {
                       key={`${log.userId}-${log.key}`}
                       className="hover:bg-gray-50"
                     >
+                      <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedLogs.some(
+                            (l) => l.key === log.key && l.userId === log.userId
+                          )}
+                          onChange={() => toggleLogSelection(log)}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        />
+                      </td>
                       <td className="px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base font-mono text-gray-500">
                         {log.logId}
                       </td>
@@ -1064,7 +1231,7 @@ function ActivityLogsPage() {
                 ) : (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 6 : 4}
+                      colSpan={isAdmin ? 7 : 5}
                       className="px-2 sm:px-4 py-2 sm:py-4 text-center text-sm sm:text-base text-gray-500"
                     >
                       No logs found

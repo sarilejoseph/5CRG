@@ -17,6 +17,17 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app } from "../firebase";
 
 const RecordForm = () => {
+  // Get current date and time in YYYY-MM-DDTHH:mm format for datetime-local input
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const [messageType, setMessageType] = useState("sent");
   const [formData, setFormData] = useState({
     id: "",
@@ -24,7 +35,7 @@ const RecordForm = () => {
     receiver: "",
     type: "STL",
     channel: "Email",
-    timestamp: "",
+    timestamp: getCurrentDateTime(), // Initialize with current date and time
     description: "",
     cite: "",
     agenda: "",
@@ -57,7 +68,6 @@ const RecordForm = () => {
           receiver: messageType === "received" ? userIdentifier : "",
           staffName: userIdentifier,
         }));
-        // Only generate ID on initial load and when not already generated
         if (!idGenerated && !formData.id) {
           generateNextId(currentUser.uid, userIdentifier);
           setIdGenerated(true);
@@ -75,7 +85,6 @@ const RecordForm = () => {
     return () => unsubscribe();
   }, [messageType]);
 
-  // Update sender/receiver when message type changes
   useEffect(() => {
     if (user) {
       const userIdentifier = user.displayName || user.email || "";
@@ -137,18 +146,14 @@ const RecordForm = () => {
         }
       }
 
-      // First check if there's an existing ID counter
       const counterRef = ref(database, `users/${userId}/lastMessageId`);
       const snapshot = await get(counterRef);
 
-      // Only increment if we're actually creating a new record
       if (!snapshot.exists()) {
-        // If no counter exists yet, initialize it to 1
         await runTransaction(counterRef, () => 1);
         const newId = `${prefix}0001`;
         setFormData((prev) => ({ ...prev, id: newId }));
       } else {
-        // If counter exists, just read it (don't increment)
         const currentValue = snapshot.val();
         const newId = `${prefix}${String(currentValue).padStart(4, "0")}`;
         setFormData((prev) => ({ ...prev, id: newId }));
@@ -179,7 +184,7 @@ const RecordForm = () => {
       id: "",
       type: "STL",
       channel: "Email",
-      timestamp: "",
+      timestamp: getCurrentDateTime(),
       description: "",
       cite: "",
       agenda: "",
@@ -195,7 +200,6 @@ const RecordForm = () => {
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = null;
 
-    // Reset ID generation state and generate a new ID
     setIdGenerated(false);
     if (user) {
       generateNextId(user.uid, userIdentifier);
@@ -253,9 +257,7 @@ const RecordForm = () => {
           formData.channel === "Other"
             ? formData.customChannelValue
             : formData.channel,
-        timestamp: formData.timestamp
-          ? new Date(formData.timestamp).getTime()
-          : Date.now(),
+        timestamp: new Date(formData.timestamp).getTime(),
         staffName:
           formData.staffName ||
           user.displayName ||
@@ -280,7 +282,7 @@ const RecordForm = () => {
           recordData.cite = formData.cite;
           break;
         case "Other":
-          recordData.description = formData.description; // Optional for Other
+          recordData.description = formData.description;
           break;
       }
 
@@ -321,7 +323,6 @@ const RecordForm = () => {
 
       await push(dbRef, recordData);
 
-      // Now increment counter for next ID
       const counterRef = ref(database, `users/${user.uid}/lastMessageId`);
       await runTransaction(counterRef, (currentValue) => {
         return (currentValue || 0) + 1;
@@ -492,7 +493,7 @@ const RecordForm = () => {
                   messageType === "sent" ? "text-blue-600" : "text-gray-500"
                 }
               >
-                Out
+                Outgoing Message
               </span>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -510,7 +511,7 @@ const RecordForm = () => {
                   messageType === "received" ? "text-blue-600" : "text-gray-500"
                 }
               >
-                In
+                Incoming Message
               </span>
             </div>
           </div>
@@ -546,7 +547,11 @@ const RecordForm = () => {
                   ))}
                 </select>
                 {formData.type === "Other" && (
-                  <div className="mt-2">
+                  <div
+                    className="mt
+
+-2"
+                  >
                     <label
                       htmlFor="customTypeValue"
                       className="block text-sm text-gray-700 mb-1"
@@ -557,7 +562,7 @@ const RecordForm = () => {
                       id="customTypeValue"
                       name="customTypeValue"
                       type="text"
-                      value={formData.customTypeValue}
+                      verifyCode={formData.customTypeValue}
                       onChange={handleChange}
                       className="w-full p-2 border rounded-md bg-gray-200"
                       placeholder="Enter custom type"
@@ -595,12 +600,15 @@ const RecordForm = () => {
                 <input
                   id="timestamp"
                   name="timestamp"
-                  type="date"
+                  type="datetime-local"
                   value={formData.timestamp}
                   onChange={handleChange}
                   className="w-full p-2 border rounded-md"
                   required
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  Current: {formData.timestamp}
+                </p>
               </div>
             </div>
 
@@ -662,7 +670,9 @@ const RecordForm = () => {
                 <input
                   id="dateReceived"
                   name="dateReceived"
-                  type="date"
+                  type="datetime-local"
+                  value={formData.dateReceived || ""}
+                  onChange={handleChange}
                   className="w-full p-2 border rounded-md"
                 />
               </div>
@@ -784,16 +794,16 @@ const RecordForm = () => {
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className={`px-3 py-1 ${
+                className={`px-4 py-2 ${
                   loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-                } text-white rounded-md flex items-center`}
+                } text-white rounded-md flex items-center justify-center`}
               >
                 {loading ? (
                   <>
